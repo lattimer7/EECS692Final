@@ -397,7 +397,7 @@ class GridAgentInterface(GridAgent):
         if not self.see_through_walls:
             return occlude_mask(~opacity_grid, self.get_view_pos())
         else:
-            return np.full(opacity_grid.shape, 1, dtype=np.bool)
+            return np.full(opacity_grid.shape, 1, dtype=bool)
 
 
 @numba.njit

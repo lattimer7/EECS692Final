@@ -228,7 +228,7 @@ class MultiGrid:
         raise NotImplementedError
         width, height, channels = array.shape
         assert channels == 3
-        vis_mask[i, j] = np.ones(shape=(width, height), dtype=np.bool)
+        vis_mask[i, j] = np.ones(shape=(width, height), dtype=bool)
         grid = cls((width, height))
 
     @classmethod
@@ -549,7 +549,7 @@ class MultiGridEnv(gym.Env):
         if self.discrete_position:
             return np.array(agent_pos)
         agent_pos = np.array(agent_pos) / np.array(
-            [self.width, self.height], dtype=np.float)
+            [self.width, self.height], dtype=float)
         return agent_pos
 
     def gen_agent_pos_obs(self, agent):
@@ -660,10 +660,10 @@ class MultiGridEnv(gym.Env):
 
         actions = [action_dict[f'agent_{i}'] for i in range(len(self.agents))]
 
-        step_rewards = np.zeros((len(self.agents, )), dtype=np.float)
-        env_rewards = np.zeros((len(self.agents, )), dtype=np.float)
+        step_rewards = np.zeros((len(self.agents, )), dtype=float)
+        env_rewards = np.zeros((len(self.agents, )), dtype=float)
 
-        comm_rewards = np.zeros((len(self.agents, )), dtype=np.float)
+        comm_rewards = np.zeros((len(self.agents, )), dtype=float)
         comm_strs = ['' for _ in range(self.num_agents)]
 
         self.step_count += 1
@@ -899,7 +899,7 @@ class MultiGridEnv(gym.Env):
 
         # Compute which cells are visible to the agent
         highlight_mask = np.full((self.width, self.height), False,
-                                 dtype=np.bool)
+                                 dtype=bool)
         for agent in self.agents:
             if agent.active:
                 xlow, ylow, xhigh, yhigh = agent.get_view_exts()

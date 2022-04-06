@@ -105,8 +105,8 @@ class Worker(mp.Process):
             for aid in range(self.num_acts):
                 values[aid][k] = [x[k] for x in list(
                     zip(*trajectory[aid]))[2]]
-                values[aid][k].append(ops.to_torch(
-                    [target_value[aid][k]]))
+                values[aid][k].append(
+                        torch.tensor([target_value[aid][k]]).cuda())
                 values[aid][k].reverse()
 
         return trajectory, values, target_value, done

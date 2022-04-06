@@ -1,0 +1,5 @@
+gym
+gym-minigrid
+numba
+numpy
+tqdm
