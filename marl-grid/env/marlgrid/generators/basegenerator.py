@@ -1,13 +1,14 @@
 from ..objects import Wall
-from enum import Enum
+from enum import IntEnum
 from typing import List
+import numpy as np
 
-class WALL_SIDE(Enum):
-    UP = 1
+class WALL_SIDE(IntEnum):
+    UP = 0
+    LEFT = 1
     DOWN = 2
-    LEFT = 3
-    RIGHT = 4
-    ALL = 5
+    RIGHT = 3
+    ALL = 4
 
 class BasePuzzleGame:
     """
@@ -65,6 +66,28 @@ class BasePuzzleGame:
             for i in range(x1, x2):
                 for j in range(y1, y2):
                     self._clear(i, j)
+
+    def _is_free(self, x: int, y: int):
+        return (x,y) in self.objs
+
+    def _sample_exit_walls(self):
+        # get the size of the space to sample
+        if len(self.exit_walls) == 1 and self.exit_walls[0] == WALL_SIDE.ALL:
+            # treat this case specifically
+            edge = np.random.randint(4)
+        else:
+            # sample the rest
+            edge = np.random.randint(len(self.exit_walls))
+            edge = int(self.exit_walls[edge])
+        # This assumes the origin is the top left!
+        if edge % 2:
+            # top and bottom case
+            loc = np.random.randint(1, self.width-1)
+            return (loc, (edge//2)*(self.height-1))
+        else:
+            # left and right case
+            loc = np.random.randint(1, self.height-1)
+            return ((edge//2)*(self.width-1), loc)
 
 
 class BasePuzzleGameGenerator:

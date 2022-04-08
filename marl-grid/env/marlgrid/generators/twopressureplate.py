@@ -1,5 +1,7 @@
 from .basegenerator import WALL_SIDE, BasePuzzleGame, BasePuzzleGameGenerator
+from ..objects import EnvLockedDoor, COLORS, PressurePlate
 from typing import List
+import random
 
 class TwoPressurePlateGame(BasePuzzleGame):
     """
@@ -20,12 +22,36 @@ class TwoPressurePlateGame(BasePuzzleGame):
     def _gen_objs(self):
         # Generate the locations of the two pressure plates & the location
         # of the exiting door & store to self.objs and self.exits.
-        pass
+        exit = self._sample_exit_walls()
+        self.exit_door = EnvLockedDoor(color=random.choice(list(COLORS)), state=EnvLockedDoor.states.closed)
+
+        self.pressureplates = [
+            PressurePlate(),
+            PressurePlate()
+        ]
+
+        # For now just generate two random positions
+        loc1 = (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
+        loc2 = (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
+        while loc2[0] == loc1[0] and loc2[1] == loc1[1]:
+            loc2 = (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
+        
+        # store the objects
+        self.objs[exit] = self.exit_door
+        self.objs[loc1] = self.pressureplates[0]
+        self.objs[loc2] = self.pressureplates[1]
+        self.exits = [exit]
 
     def update(self):
         # Check the states of the two pressure plates, and unlock the door
         # if the two plates are activated at once, giving a small reward.
-        pass
+        rew = 0
+        if self.pressureplates[0].state == PressurePlate.states.active \
+            and self.pressureplates[1].state == PressurePlate.states.active:
+            self.exit_door.unlock()
+            rew = 1
+        
+        return rew, {}
 
     #def gen_room_obs(self):
         # IDK what I'd do with this yet

@@ -738,9 +738,17 @@ class MultiGridEnv(gym.Env):
                                     rwd, agent_no)
                                 env_rewards += env_rew
                                 step_rewards += step_rew
+                            
+                            # call set_active and unset_active on objects
+                            # added for pressure plate activations
+                            if hasattr(fwd_cell, 'set_active'):
+                                fwd_cell.set_active()
+                            if hasattr(cur_cell, 'unset_active'):
+                                cur_cell.unset_active()
 
                         if isinstance(fwd_cell, Goal):
                             agent.done = True
+                        
 
                 # Pick up an object
                 elif action == agent.actions.pickup:

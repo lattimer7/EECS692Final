@@ -327,9 +327,10 @@ class PressurePlate(WorldObj):
     class states(IntEnum):
         novel = 1
         found = 2
+        active = 3
 
-    def __init__(self, reward=0.5, color='orange', *args, **kwargs):
-        super().__init__(*args, **{'color': color, **kwargs})
+    def __init__(self, reward=0.5, color='orange', state=states.novel, *args, **kwargs):
+        super().__init__(*args, **{'color': color, 'state': state, **kwargs})
         self.reward = reward
         self.state = self.states.novel
 
@@ -341,12 +342,20 @@ class PressurePlate(WorldObj):
 
     def get_reward(self, agent):
         # If this pressure plate has already been activated, don't give a reward
-        if self.state == self.states.found:
+        if self.state == self.states.found or self.state == self.states.active:
             return 0
         else:
             # Otherwise make it found and get a small reward.
             self.state = self.states.found
             return self.reward
+
+    def set_active(self):
+        if self.state == self.states.found:
+            self.state = self.states.active
+
+    def unset_active(self):
+        if self.state == self.states.active:
+            self.state = self.states.found
 
     def render(self, img):
         fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
