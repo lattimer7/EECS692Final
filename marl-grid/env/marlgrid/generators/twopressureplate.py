@@ -1,6 +1,7 @@
 from .basegenerator import WALL_SIDE, BasePuzzleGame, BasePuzzleGameGenerator
 from ..objects import EnvLockedDoor, COLORS, PressurePlate
 from typing import List
+import numpy as np
 import random
 
 class TwoPressurePlateGame(BasePuzzleGame):
@@ -31,10 +32,10 @@ class TwoPressurePlateGame(BasePuzzleGame):
         ]
 
         # For now just generate two random positions
-        loc1 = (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
-        loc2 = (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
+        loc1 = (np.random.randint(1, self.width - 1), np.random.randint(1, self.height - 1))
+        loc2 = (np.random.randint(1, self.width - 1), np.random.randint(1, self.height - 1))
         while loc2[0] == loc1[0] and loc2[1] == loc1[1]:
-            loc2 = (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
+            loc2 = (np.random.randint(1, self.width - 1), np.random.randint(1, self.height - 1))
         
         # store the objects
         self.objs[exit] = self.exit_door

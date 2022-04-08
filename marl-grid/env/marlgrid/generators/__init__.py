@@ -1,0 +1,2 @@
+from .twopressureplate import TwoPressurePlateGameGenerator
+
