@@ -5,6 +5,7 @@ from gym.envs.registration import register as gym_register
 
 from .findgoal import FindGoalMultiGrid
 from .redbluedoors import RedBlueDoorsMultiGrid
+# from .oneroompuzzle import OneRoomPuzzleMultiGrid
 from ..agents import GridAgentInterface
 from ..base import MultiGridEnv
 
@@ -204,6 +205,11 @@ def register_env(
         assert n_agents == 2
         assert n_adversaries == 0
         restrict_actions = False
+    # elif env_type == 'oneroompuzzle':
+    #     env_class = OneRoomPuzzleMultiGrid
+    #     assert n_agents == 2
+    #     assert n_adversaries == 0
+    #     restrict_actions = False
     else:
         raise ValueError(f'env type {env_type} not supported')
 

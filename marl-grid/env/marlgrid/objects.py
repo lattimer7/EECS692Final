@@ -263,7 +263,8 @@ class FreeDoor(WorldObj):
         return self.state == self.states.open
 
     def can_overlap(self):
-        return False
+        # Change this so the agents can actually go through the door after open
+        return self.is_open()
 
     def see_behind(self):
         return self.is_open()
@@ -292,3 +293,60 @@ class FreeDoor(WorldObj):
 
             # Draw door handle
             fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
+
+# This is a special door object that is only unlocked via an environment call.
+class EnvLockedDoor(FreeDoor):
+    def toggle(self, env, pos):
+        return False
+
+    def unlock(self):
+        if self.state == self.states.closed:
+            self.state = self.states.open
+        elif self.state == self.states.open:
+            # door can only be opened once
+            pass
+        else:
+            raise ValueError(f'?!?!?! EnvLockedDoor in state {self.state}')
+
+    def render(self, img):
+        c = COLORS[self.color]
+
+        if self.state == self.states.open:
+            fill_coords(img, point_in_rect(0.88, 1.00, 0.00, 1.00), c)
+            fill_coords(img, point_in_rect(0.92, 0.96, 0.04, 0.96), (0, 0, 0))
+        else:
+            fill_coords(img, point_in_rect(0.00, 1.00, 0.00, 1.00), c)
+            fill_coords(img, point_in_rect(0.04, 0.96, 0.04, 0.96), (0, 0, 0))
+            fill_coords(img, point_in_rect(0.08, 0.92, 0.08, 0.92), c)
+            fill_coords(img, point_in_rect(0.12, 0.88, 0.12, 0.88), (0, 0, 0))
+
+            # DON'T Draw door handle
+            #fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
+
+class PressurePlate(WorldObj):
+    class states(IntEnum):
+        novel = 1
+        found = 2
+
+    def __init__(self, reward=0.5, color='orange', *args, **kwargs):
+        super().__init__(*args, **{'color': color, **kwargs})
+        self.reward = reward
+        self.state = self.states.novel
+
+    def can_overlap(self):
+        return True
+
+    def str_render(self, dir=0):
+        return 'PP'
+
+    def get_reward(self, agent):
+        # If this pressure plate has already been activated, don't give a reward
+        if self.state == self.states.found:
+            return 0
+        else:
+            # Otherwise make it found and get a small reward.
+            self.state = self.states.found
+            return self.reward
+
+    def render(self, img):
+        fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
