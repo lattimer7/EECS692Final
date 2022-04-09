@@ -48,7 +48,8 @@ class TwoPressurePlateGame(BasePuzzleGame):
         # if the two plates are activated at once, giving a small reward.
         rew = 0
         if self.pressureplates[0].state == PressurePlate.states.active \
-            and self.pressureplates[1].state == PressurePlate.states.active:
+            and self.pressureplates[1].state == PressurePlate.states.active \
+            and self.exit_door.state == EnvLockedDoor.states.closed:
             self.exit_door.unlock()
             rew = 1
         
