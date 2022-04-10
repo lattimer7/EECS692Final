@@ -3,6 +3,7 @@ import numpy.random as random
 import sys
 from gym.envs.registration import register as gym_register
 
+from .pressure import PressurePlateMultiGrid
 from .findgoal import FindGoalMultiGrid
 from .redbluedoors import RedBlueDoorsMultiGrid
 from ..agents import GridAgentInterface
@@ -203,6 +204,10 @@ def register_env(
         env_class = RedBlueDoorsMultiGrid
         assert n_agents == 2
         assert n_adversaries == 0
+        restrict_actions = False
+    elif env_type == 'p':
+        env_class = PressurePlateMultiGrid
+        assert n_agents == 2
         restrict_actions = False
     else:
         raise ValueError(f'env type {env_type} not supported')

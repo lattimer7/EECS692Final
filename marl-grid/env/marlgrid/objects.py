@@ -224,6 +224,27 @@ class BonusTile(WorldObj):
     def render(self, img):
         fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
 
+class PressurePlate(WorldObj):
+    def __init__(self, reward, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reward = reward
+        self.been_stepped_on = False
+
+    def can_overlap(self):
+        return True
+
+    def stepped(self):
+        if not self.been_stepped_on:
+            self.been_stepped_on = True
+            return self.reward
+        return 0
+
+    def str_render(self, dir=0):
+        return 'GG'
+
+    def render(self, img):
+        fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
+
 
 class Goal(WorldObj):
     def __init__(self, reward, *args, **kwargs):
@@ -292,3 +313,40 @@ class FreeDoor(WorldObj):
 
             # Draw door handle
             fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
+
+
+# This is a special door object that is only unlocked via an environment call.
+class EnvLockedDoor(FreeDoor):
+    def toggle(self, env, pos):
+        return False
+
+    def unlock(self):
+        if self.state == self.states.closed:
+            self.state = self.states.open
+        elif self.state == self.states.open:
+            # door can only be opened once
+            pass
+        else:
+            raise ValueError(f'?!?!?! EnvLockedDoor in state {self.state}')
+    def lock(self):
+        if self.state == self.states.open:
+            self.state = self.states.closed
+        elif self.state == self.states.closed:
+            # door can only be opened once
+            pass
+        else:
+            raise ValueError(f'?!?!?! EnvLockedDoor in state {self.state}')
+    def render(self, img):
+        c = COLORS[self.color]
+
+        if self.state == self.states.open:
+            fill_coords(img, point_in_rect(0.88, 1.00, 0.00, 1.00), c)
+            fill_coords(img, point_in_rect(0.92, 0.96, 0.04, 0.96), (0, 0, 0))
+        else:
+            fill_coords(img, point_in_rect(0.00, 1.00, 0.00, 1.00), c)
+            fill_coords(img, point_in_rect(0.04, 0.96, 0.04, 0.96), (0, 0, 0))
+            fill_coords(img, point_in_rect(0.08, 0.92, 0.08, 0.92), c)
+            fill_coords(img, point_in_rect(0.12, 0.88, 0.12, 0.88), (0, 0, 0))
+
+            # DON'T Draw door handle
+            #fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
