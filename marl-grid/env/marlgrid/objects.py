@@ -332,7 +332,7 @@ class PressurePlate(WorldObj):
     def __init__(self, reward=0.5, color='orange', state=states.novel, *args, **kwargs):
         super().__init__(*args, **{'color': color, 'state': state, **kwargs})
         self.reward = reward
-        self.state = self.states.novel
+        self.state = state
 
     def can_overlap(self):
         return True

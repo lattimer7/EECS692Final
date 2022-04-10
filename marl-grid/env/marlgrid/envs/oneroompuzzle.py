@@ -20,7 +20,8 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
 
     def __init__(self, config):
         self.size = config.get('grid_size')
-        self.generators = config.get('generators') # getting this argument in here needs a check.
+        # TODO: Change to be loaded by name from generators, for sake of
+        self.generators = config.get('generators')
         width = self.size
         height = self.size
 
@@ -57,10 +58,21 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
             self.grid.set(pos[0], pos[1], obj)
 
         # We set our goal to the exit
-        self.goal_pos = exits[0]
+        # self.goal_pos = exits[0]
+        # print(self.goal_pos)
 
-        return None
+        return exits[0]
+    
+    def _get_reward(self, rwd, agent_no):
+        step_rewards = np.zeros((len(self.agents, )), dtype=float)
+        env_rewards = np.zeros((len(self.agents, )), dtype=float)
+        env_rewards[agent_no] += rwd
+        step_rewards[agent_no] += rwd
 
+        # this is for some prestige system? not sure.
+        # self.agents[agent_no].reward(rwd)
+
+        return env_rewards, step_rewards
     # def _step_reward(self):
     #     return 1 - 0.9 * (self.step_count / self.max_steps)
 
@@ -81,6 +93,14 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
         obs_dict['global'] = self.gen_global_obs()
         return obs_dict
 
+    # Modify this so that we have the agent continue to communicate useful info even when not active.
+    def gen_agent_obs(self, agent, image_only=False):
+        active = agent.active
+        agent.active = True
+        res = MultiGridEnv.gen_agent_obs(self, agent, image_only=image_only)
+        agent.active = active
+        return res
+
     def step(self, action_dict):
         obs_dict, rew_dict, _, info_dict = MultiGridEnv.step(self, action_dict)
 
@@ -89,13 +109,31 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
 
         # See if all agents made it to the goal or if we have timeout
         done = [self.agents[i].at_pos(self.goal_pos) for i in range(self.num_agents)]
+        for i,d in enumerate(done):
+            if d is False: continue
+            # Give reward and deactivate the agent if done.
+            if self.agents[i].done is False:
+                self.agents[i].done = True
+                rew_dict['env_rewards'][i] += 1
+            self.agents[i].deactivate()
+        
         success = all(done)
         timeout = (self.step_count >= self.max_steps)
 
         # construct return dicts
         obs_dict['global'] = self.gen_global_obs()
+        
         rew_dict['env_rewards'] += room_rew
+        agent_rew = {f'agent_{i}': rew_dict['env_rewards'][i] for i in range(
+            len(rew_dict['env_rewards']))}
+        # rew_dict = {**rew_dict, **agent_rew}
+        rew_dict = agent_rew
+        # if success:
+        #     print(rew_dict)
+
         done_dict = {f'agent_{i}': done[i] or timeout for i in range(len(done))}
+        done_dict['__all__'] = success or timeout
+        
         env_info = {
             'done': success,
             'timeout': timeout,
