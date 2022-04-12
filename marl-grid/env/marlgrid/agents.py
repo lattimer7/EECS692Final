@@ -6,6 +6,26 @@ from enum import IntEnum
 
 from .objects import GridAgent, BonusTile
 
+class SelectiveGridAgentInterface(GridAgentInterface):
+    def __init__(
+            self, hide_item_colors = [], cant_pick_up = [], **kwargs):
+        super().__init__(**kwargs)
+        self.hide_item_colors = hide_item_colors
+        self.cant_pick_up = cant_pick_up
+        
+    def hide_color(self, color):
+        self.hide_item_colors.append(color)
+    def hide_own_color(self):
+        self.hide_color(self.color)
+    def see_all_colors(self):
+        self.hide_item_colors = []
+    def block_color_pick(self, color):
+        self.cant_pick_up.append(color)
+    def allow_all_pick(self, color):
+        self.cant_pick_up = []
+    
+    
+
 
 class GridAgentInterface(GridAgent):
     class actions(IntEnum):

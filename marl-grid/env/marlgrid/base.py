@@ -508,12 +508,12 @@ class MultiGridEnv(gym.Env):
         # Allows masking away objects that the agent isn't supposed to see.
         # But breaks consistency between the states of the grid objects in the
         # parial views and the grid objects overall.
-        if len(getattr(agent, 'hide_item_types', [])) > 0:
+        if len(getattr(agent, 'hide_item_types', [])) > 0 or len(getattr(agent, 'hide_item_colors', [])) > 0:
             for i in range(grid.width):
                 for j in range(grid.height):
                     item = grid.get(i, j)
                     if (item is not None) and (item is not agent) and (
-                            item.type in agent.hide_item_types):
+                            item.type in agent.hide_item_types or (agent.hide_item_colors is not None and item.color in agent.hide_item_colors):
                         if len(item.agents) > 0:
                             grid.set(i, j, item.agents[0])
                         else:
@@ -753,10 +753,12 @@ class MultiGridEnv(gym.Env):
                 # Pick up an object
                 elif action == agent.actions.pickup:
                     if fwd_cell and fwd_cell.can_pickup():
-                        if agent.carrying is None:
-                            agent.carrying = fwd_cell
-                            agent.carrying.cur_pos = np.array([-1, -1])
-                            self.grid.set(*fwd_pos, None)
+                        if not (len(getattr(agent, 'cant_pick_up', [])) > 0 and fwd_cell.color in agent.cant_pick_up):
+                        # That is, if it's a color the agent can carry
+                            if agent.carrying is None:
+                                agent.carrying = fwd_cell
+                                agent.carrying.cur_pos = np.array([-1, -1])
+                                self.grid.set(*fwd_pos, None)
                     else:
                         pass
 
