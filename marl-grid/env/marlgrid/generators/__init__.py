@@ -1,2 +1,2 @@
 from .twopressureplate import TwoPressurePlateGameGenerator
-
+from .cycleboxcolor import CycleBoxColorGameGenerator

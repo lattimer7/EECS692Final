@@ -363,13 +363,12 @@ class PressurePlate(WorldObj):
 
 
 class ColorCyclerBox(WorldObj):
-    states = Enum('Color', list(COLORS.keys()))
-
-    def __init__(self, reward=0.5, color='red', interactable_agents = []):
+    def __init__(self, reward=0.5, color='red', interactable_agents = [], *args, **kwargs):
+        super().__init__(*args, **kwargs)
         # Set the color state
         self.color = color
         idx = next(i for i,c in enumerate(COLORS.keys()) if c == color)
-        self.state = self.states(idx + 1)
+        self.state = idx
         self.interactable_agents = interactable_agents
         self.last_toggling_agent = None
         self.reward = reward
@@ -379,19 +378,20 @@ class ColorCyclerBox(WorldObj):
         self.disabled = True
 
     def _get_next_color(self):
-        max = len(self.states)
-        next = self.state.value % max
-        return self.states(next + 1)
+        max = len(COLORS.keys())
+        next = (self.state + 1) % max
+        return next
     
-    def _get_color_rgb(self):
-        return COLORS[self.states.name]
+    def _get_color(self):
+        key = list(COLORS.keys())[self.state]
+        return (key, COLORS[key])
 
     def toggle(self, agent, pos):
         # See if this is an agent we can actually interact with
         if next((a for a in self.interactable_agents if a == agent), None) is not None:
             self.last_toggling_agent = agent
             self.state = self._get_next_color()
-            self.color = self.state.name
+            self.color = self._get_color()[0]
         else:
             return False
         
@@ -402,18 +402,15 @@ class ColorCyclerBox(WorldObj):
         return 'CC'
     
     def render(self, img):
-        fill_coords(img, point_in_rect(0.25, 0.75, 0.25, 0.75), self._get_color_rgb())
+        fill_coords(img, point_in_rect(0.25, 0.75, 0.25, 0.75), self._get_color()[1])
         fill_coords(img, point_in_circle(0.5, 0.5, 0.1), (0,0,0))
 
 
 class StaticCodedTriangle(WorldObj):
-    states = Enum('Color', list(COLORS.keys()))
-
-    def __init__(self, color='red'):
+    def __init__(self, color='red', *args, **kwargs):
+        super().__init__(*args, **kwargs)
         # Set the color state
         self.color = color
-        idx = next(i for i,c in enumerate(COLORS.keys()) if c == color)
-        self.state = self.states(idx + 1)
 
     def can_overlap(self):
         return True

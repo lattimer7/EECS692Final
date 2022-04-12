@@ -41,7 +41,7 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
 
         # Get the generator objects and update mission
         # TODO: will this update the mission?
-        self.current_game = self.generators[gen_id].generate()
+        self.current_game = self.generators[gen_id].generate(self)
         self.mission = self.current_game.mission
 
         # Add all objects that are not boundary walls.

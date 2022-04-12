@@ -16,9 +16,9 @@ class TwoPressurePlateGame(BasePuzzleGame):
 
     mission = 'activate both pressure plates simultaneously'
 
-    def __init__(self, width: int, height: int, exit_walls: List[WALL_SIDE], config: dict):
+    def __init__(self, width: int, height: int, env, exit_walls: List[WALL_SIDE], config: dict):
         # Call the super class
-        super().__init__(width, height, exit_walls, config)
+        super().__init__(width, height, env, exit_walls, config)
 
     def _gen_objs(self):
         # Generate the locations of the two pressure plates & the location

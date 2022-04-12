@@ -19,10 +19,10 @@ class CycleBoxColorGame(BasePuzzleGame):
 
     mission = 'match the color of the boxes to their corresponding triangles'
 
-    def __init__(self, width: int, height: int, exit_walls: List[WALL_SIDE], config: dict):
-        # Call the super class
-        super().__init__(width, height, exit_walls, config)
+    def __init__(self, width: int, height: int, env, exit_walls: List[WALL_SIDE], config: dict):
         self.code_size = 4
+        # Call the super class
+        super().__init__(width, height, env, exit_walls, config)
 
     def _gen_objs(self):
         # Generate the locations of the two pressure plates & the location
@@ -35,9 +35,9 @@ class CycleBoxColorGame(BasePuzzleGame):
         # Generate 4 colors
         colors = [random.choice(list(COLORS)) for _ in range(self.code_size)]
         # Select 1 agent to do the toggling and set obfuscation
-        for agent in self.agents:
+        for agent in self.env.agents:
             agent.hide_item_types = [ColorCyclerBox]
-        choice_agent = random.choice(self.agents)
+        choice_agent = random.choice(self.env.agents)
         choice_agent.hide_item_types = [StaticCodedTriangle]
 
 
@@ -79,12 +79,13 @@ class CycleBoxColorGame(BasePuzzleGame):
             self.objs[loc[1]] = self.codepairs[-1][1]
 
         # save the exit
+        self.objs[exit] = self.exit_door
         self.exits = [exit]
 
     def update(self):
         # Check the states of the codepairs and give a reward if the right
         # color is selected the first time.
-        rew = np.zeros((len(self.agents, )), dtype=float)
+        rew = np.zeros((len(self.env.agents, )), dtype=float)
 
         # TODO add info for toggle colors
 
@@ -93,7 +94,7 @@ class CycleBoxColorGame(BasePuzzleGame):
         for code,box in self.codepairs:
             if code.color == box.color:
                 if box.reward > 0:
-                    i = next(i for i,a in enumerate(self.agents) if a == box.last_toggling_agent)
+                    i = next(i for i,a in enumerate(self.env.agents) if a == box.last_toggling_agent)
                     rew[i] += box.reward
                     box.reward = 0
             else:
