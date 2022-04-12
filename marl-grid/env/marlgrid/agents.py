@@ -21,8 +21,10 @@ class SelectiveGridAgentInterface(GridAgentInterface):
         self.hide_item_colors = []
     def block_color_pick(self, color):
         self.cant_pick_up.append(color)
-    def allow_all_pick(self, color):
+    def allow_all_pick(self):
         self.cant_pick_up = []
+    def allow_one_pick(self, color):
+        self.cant_pick_up = [x for x in self.cant_pick_up if x is not color]
     
     
 
