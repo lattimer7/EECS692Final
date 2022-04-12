@@ -1,5 +1,5 @@
 import numpy as np
-from enum import IntEnum
+from enum import IntEnum, Enum
 from gym_minigrid.rendering import (
     fill_coords,
     point_in_circle,
@@ -87,7 +87,7 @@ class WorldObj(metaclass=RegisteredObjectType):
     def see_behind(self):
         return True
 
-    def toggle(self, env, pos):
+    def toggle(self, agent, pos):
         return False
 
     def encode(self, str_class=False):
@@ -296,7 +296,7 @@ class FreeDoor(WorldObj):
 
 # This is a special door object that is only unlocked via an environment call.
 class EnvLockedDoor(FreeDoor):
-    def toggle(self, env, pos):
+    def toggle(self, agent, pos):
         return False
 
     def unlock(self):
@@ -322,6 +322,7 @@ class EnvLockedDoor(FreeDoor):
 
             # DON'T Draw door handle
             #fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
+
 
 class PressurePlate(WorldObj):
     class states(IntEnum):
@@ -359,3 +360,70 @@ class PressurePlate(WorldObj):
 
     def render(self, img):
         fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
+
+
+class ColorCyclerBox(WorldObj):
+    states = Enum('Color', list(COLORS.keys()))
+
+    def __init__(self, reward=0.5, color='red', interactable_agents = []):
+        # Set the color state
+        self.color = color
+        idx = next(i for i,c in enumerate(COLORS.keys()) if c == color)
+        self.state = self.states(idx + 1)
+        self.interactable_agents = interactable_agents
+        self.last_toggling_agent = None
+        self.reward = reward
+        self.disabled = False
+
+    def disable(self):
+        self.disabled = True
+
+    def _get_next_color(self):
+        max = len(self.states)
+        next = self.state.value % max
+        return self.states(next + 1)
+    
+    def _get_color_rgb(self):
+        return COLORS[self.states.name]
+
+    def toggle(self, agent, pos):
+        # See if this is an agent we can actually interact with
+        if next((a for a in self.interactable_agents if a == agent), None) is not None:
+            self.last_toggling_agent = agent
+            self.state = self._get_next_color()
+            self.color = self.state.name
+        else:
+            return False
+        
+    def can_overlap(self):
+        return True
+    
+    def str_render(self, dir=0):
+        return 'CC'
+    
+    def render(self, img):
+        fill_coords(img, point_in_rect(0.25, 0.75, 0.25, 0.75), self._get_color_rgb())
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.1), (0,0,0))
+
+
+class StaticCodedTriangle(WorldObj):
+    states = Enum('Color', list(COLORS.keys()))
+
+    def __init__(self, color='red'):
+        # Set the color state
+        self.color = color
+        idx = next(i for i,c in enumerate(COLORS.keys()) if c == color)
+        self.state = self.states(idx + 1)
+
+    def can_overlap(self):
+        return True
+
+    def str_render(self, dir=0):
+        return 'CT'
+
+    def render(self, img):
+        fill_coords(img, point_in_triangle((0.24, 0.2), (0.76, 0.50),
+                                           (0.24, 0.8)), COLORS[self.color])
+        fill_coords(img, point_in_triangle((0.4135, 0.6), (0.5865, 0.50),
+                                           (0.4135, 0.6)), (0,0,0))
+
