@@ -407,10 +407,15 @@ class ColorCyclerBox(WorldObj):
 
 
 class StaticCodedTriangle(WorldObj):
-    def __init__(self, color='red', *args, **kwargs):
+    def __init__(self, color='red', dir=0, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Set the color state
         self.color = color
+        self.state = dir
+
+    @property
+    def dir(self):
+        return self.state % 4
 
     def can_overlap(self):
         return True
@@ -419,8 +424,10 @@ class StaticCodedTriangle(WorldObj):
         return 'CT'
 
     def render(self, img):
-        fill_coords(img, point_in_triangle((0.24, 0.2), (0.76, 0.50),
-                                           (0.24, 0.8)), COLORS[self.color])
-        fill_coords(img, point_in_triangle((0.4135, 0.6), (0.5865, 0.50),
-                                           (0.4135, 0.6)), (0,0,0))
+        outer_fn = point_in_triangle((0.24, 0.2), (0.76, 0.50), (0.24, 0.8))
+        outer_fn = rotate_fn(outer_fn, cx=0.5, cy=0.5, theta=1.5 * np.pi * self.dir)
+        inner_fn = point_in_triangle((0.4135, 0.4), (0.5865, 0.50), (0.4135, 0.6))
+        inner_fn = rotate_fn(inner_fn, cx=0.5, cy=0.5, theta=1.5 * np.pi * self.dir)
+        fill_coords(img, outer_fn, COLORS[self.color])
+        fill_coords(img, inner_fn, (0,0,0))
 

@@ -4,11 +4,13 @@ from typing import List
 import numpy as np
 
 class WALL_SIDE(IntEnum):
-    UP = 0
-    LEFT = 1
-    DOWN = 2
-    RIGHT = 3
+    RIGHT = 0
+    DOWN = 1
+    LEFT = 2
+    UP = 3
     ALL = 4
+
+ # X increasing to the right, Y increasing down.
 
 class BasePuzzleGame:
     """
@@ -82,13 +84,13 @@ class BasePuzzleGame:
             edge = int(self.exit_walls[edge])
         # This assumes the origin is the top left!
         if edge % 2:
-            # top and bottom case
-            loc = np.random.randint(1, self.width-1)
-            return (loc, (edge//2)*(self.height-1))
-        else:
             # left and right case
             loc = np.random.randint(1, self.height-1)
-            return ((edge//2)*(self.width-1), loc)
+            return ((1 - edge//2)*(self.width-1), loc)
+        else:
+            # top and bottom case
+            loc = np.random.randint(1, self.width-1)
+            return (loc, (1 - edge//2)*(self.height-1))
 
 
 class BasePuzzleGameGenerator:

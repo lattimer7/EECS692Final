@@ -31,23 +31,24 @@ class CycleBoxColorGame(BasePuzzleGame):
         self.exit_door = EnvLockedDoor(color=random.choice(list(COLORS)), state=EnvLockedDoor.states.closed)
 
         # Generate 4 directional sets
-        dirs = np.random.randint(self.code_size, size=self.code_size)
+        dirs = np.random.randint(4, size=self.code_size)
         # Generate 4 colors
         colors = [random.choice(list(COLORS)) for _ in range(self.code_size)]
         # Select 1 agent to do the toggling and set obfuscation
         for agent in self.env.agents:
-            agent.hide_item_types = [ColorCyclerBox]
+            agent.hide_item_types = [ColorCyclerBox().type]
         choice_agent = random.choice(self.env.agents)
-        choice_agent.hide_item_types = [StaticCodedTriangle]
+        choice_agent.hide_item_types = [StaticCodedTriangle().type]
 
 
         # The center will always be the coded triangle
+        # RIGHT DOWN LEFT UP
         def loc_gen(dir):
             loc1 = (np.random.randint(1, self.width - 1), np.random.randint(1, self.height - 1))
-            if dir < 2:
-                loc2 = (loc1[0] + dir*2 - 1, loc1[1])
+            if dir % 2 == 0:
+                loc2 = (loc1[0] - (dir - 1), loc1[1])
             else:
-                loc2 = (loc1[0], loc1[1] + (dir-2)*2 - 1)
+                loc2 = (loc1[0], loc1[1] + (dir - 2))
             return (loc1,loc2)
 
         def loc_valid(loc_pair):
@@ -68,7 +69,7 @@ class CycleBoxColorGame(BasePuzzleGame):
         for color, dir in zip(colors, dirs):
             color2 = rng_exclude_color(color)
             self.codepairs.append(
-                (StaticCodedTriangle(color),
+                (StaticCodedTriangle(color=color, dir=dir),
                 ColorCyclerBox(color=color2, interactable_agents=[choice_agent]))
             )
             # Get a location
