@@ -363,11 +363,19 @@ class PressurePlate(WorldObj):
 
 
 class ColorCyclerBox(WorldObj):
-    def __init__(self, reward=0.5, color='red', interactable_agents = [], *args, **kwargs):
+    colors_states = [
+        'orange',
+        'green',
+        'cyan',
+        'purple',
+        'pink',
+        'white',
+    ]
+    def __init__(self, reward=0.5, color='orange', interactable_agents = [], *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Set the color state
         self.color = color
-        idx = next(i for i,c in enumerate(COLORS.keys()) if c == color)
+        idx = next(i for i,c in enumerate(self.colors_states) if c == color)
         self.state = idx
         self.interactable_agents = interactable_agents
         self.last_toggling_agent = None
@@ -378,12 +386,12 @@ class ColorCyclerBox(WorldObj):
         self.disabled = True
 
     def _get_next_color(self):
-        max = len(COLORS.keys())
+        max = len(self.colors_states)
         next = (self.state + 1) % max
         return next
     
     def _get_color(self):
-        key = list(COLORS.keys())[self.state]
+        key = self.colors_states[self.state]
         return (key, COLORS[key])
 
     def toggle(self, agent, pos):
@@ -407,7 +415,7 @@ class ColorCyclerBox(WorldObj):
 
 
 class StaticCodedTriangle(WorldObj):
-    def __init__(self, color='red', dir=0, *args, **kwargs):
+    def __init__(self, color='orange', dir=0, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Set the color state
         self.color = color
