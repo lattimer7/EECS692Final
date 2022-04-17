@@ -4,11 +4,13 @@ from typing import List
 import numpy as np
 
 class WALL_SIDE(IntEnum):
-    UP = 0
-    LEFT = 1
-    DOWN = 2
-    RIGHT = 3
+    RIGHT = 0
+    DOWN = 1
+    LEFT = 2
+    UP = 3
     ALL = 4
+
+ # X increasing to the right, Y increasing down.
 
 class BasePuzzleGame:
     """
@@ -30,9 +32,10 @@ class BasePuzzleGame:
 
     mission = ''
 
-    def __init__(self, width: int, height: int, exit_walls: List[WALL_SIDE], config: dict):
+    def __init__(self, width: int, height: int, env, exit_walls: List[WALL_SIDE], config: dict):
         self.width = width
         self.height = height
+        self.env = env
         self.exit_walls = exit_walls
         self.config = config
         self.objs = {}
@@ -68,7 +71,7 @@ class BasePuzzleGame:
                     self._clear(i, j)
 
     def _is_free(self, x: int, y: int):
-        return (x,y) in self.objs
+        return not ((x,y) in self.objs)
 
     def _sample_exit_walls(self):
         # get the size of the space to sample
@@ -81,13 +84,13 @@ class BasePuzzleGame:
             edge = int(self.exit_walls[edge])
         # This assumes the origin is the top left!
         if edge % 2:
-            # top and bottom case
-            loc = np.random.randint(1, self.width-1)
-            return (loc, (edge//2)*(self.height-1))
-        else:
             # left and right case
             loc = np.random.randint(1, self.height-1)
-            return ((edge//2)*(self.width-1), loc)
+            return ((1 - edge//2)*(self.width-1), loc)
+        else:
+            # top and bottom case
+            loc = np.random.randint(1, self.width-1)
+            return (loc, (1 - edge//2)*(self.height-1))
 
 
 class BasePuzzleGameGenerator:
@@ -114,5 +117,5 @@ class BasePuzzleGameGenerator:
         if config is not None:
             self.config = {**self.config, **config}
     
-    def generate(self, exit_walls: List[WALL_SIDE] = [WALL_SIDE.ALL]):
-        return self.PuzzleGame(self.width, self.height, exit_walls, self.config)
+    def generate(self, env, exit_walls: List[WALL_SIDE] = [WALL_SIDE.ALL]):
+        return self.PuzzleGame(self.width, self.height, env, exit_walls, self.config)

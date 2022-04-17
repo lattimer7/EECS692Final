@@ -6,7 +6,7 @@ from __future__ import unicode_literals
 from easydict import EasyDict as edict
 import marlgrid.envs
 import marlgrid
-from marlgrid.generators import TwoPressurePlateGameGenerator
+from marlgrid.generators import TwoPressurePlateGameGenerator, CycleBoxColorGameGenerator
 
 
 def create_grid_world_env(env_cfg):
@@ -42,7 +42,7 @@ def create_grid_world_env(env_cfg):
             'seed': env_cfg.seed,
             'active_after_done': env_cfg.active_after_done,
             'discrete_position': env_cfg.discrete_position,
-            'generators': [TwoPressurePlateGameGenerator(10, 10)]
+            'generators': [CycleBoxColorGameGenerator(10, 10)]
         },
         env_type=env_cfg.env_type)
 
