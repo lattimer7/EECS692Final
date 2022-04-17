@@ -4,30 +4,7 @@ import numpy as np
 import warnings
 from enum import IntEnum
 
-from .objects import GridAgent, BonusTile
-
-class SelectiveGridAgentInterface(GridAgentInterface):
-    def __init__(
-            self, hide_item_colors = [], cant_pick_up = [], **kwargs):
-        super().__init__(**kwargs)
-        self.hide_item_colors = hide_item_colors
-        self.cant_pick_up = cant_pick_up
-        
-    def hide_color(self, color):
-        self.hide_item_colors.append(color)
-    def hide_own_color(self):
-        self.hide_color(self.color)
-    def see_all_colors(self):
-        self.hide_item_colors = []
-    def block_color_pick(self, color):
-        self.cant_pick_up.append(color)
-    def allow_all_pick(self):
-        self.cant_pick_up = []
-    def allow_one_pick(self, color):
-        self.cant_pick_up = [x for x in self.cant_pick_up if x is not color]
-    
-    
-
+from .objects import GridAgent, BonusTile, COLORS
 
 class GridAgentInterface(GridAgent):
     class actions(IntEnum):
@@ -467,3 +444,25 @@ def occlude_mask(grid, agent_pos):
                         mask[i - 1, j + 1] = True
 
     return mask
+
+class SelectiveGridAgentInterface(GridAgentInterface):
+    def __init__(
+            self, hide_item_colors = [], cant_pick_up = [], **kwargs):
+        super().__init__(**kwargs)
+        self.hide_item_colors = hide_item_colors
+        self.cant_pick_up = cant_pick_up
+        
+    def hide_color(self, color):
+        self.hide_item_colors.append(color)
+    def hide_own_color(self):
+        self.hide_color(self.color)
+    def see_all_colors(self):
+        self.hide_item_colors = []
+    def block_color_pick(self, color):
+        self.cant_pick_up.append(color)
+    def allow_all_pick(self):
+        self.cant_pick_up = []
+    def allow_one_pick(self, color):
+        self.cant_pick_up = [x for x in list(COLORS.keys()) if x is not color]
+    
+    

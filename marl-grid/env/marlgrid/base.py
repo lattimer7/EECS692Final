@@ -508,16 +508,23 @@ class MultiGridEnv(gym.Env):
         # Allows masking away objects that the agent isn't supposed to see.
         # But breaks consistency between the states of the grid objects in the
         # parial views and the grid objects overall.
-        if len(getattr(agent, 'hide_item_types', [])) > 0 or len(getattr(agent, 'hide_item_colors', [])) > 0:
-            for i in range(grid.width):
-                for j in range(grid.height):
-                    item = grid.get(i, j)
-                    if (item is not None) and (item is not agent) and (
-                            item.type in agent.hide_item_types or (agent.hide_item_colors is not None and item.color in agent.hide_item_colors):
-                        if len(item.agents) > 0:
-                            grid.set(i, j, item.agents[0])
-                        else:
-                            grid.set(i, j, None)
+        
+        # Converted to a function call so it's a little neater
+        # & ensures respective masking
+        def mask_by_attr(grid, agent, attribute_name, mask):
+            if len(mask) > 0:
+                for i in range(grid.width):
+                    for j in range(grid.height):
+                        item = grid.get(i, j)
+                        if (item is not None) and (item is not agent) and (
+                                getattr(item, attribute_name,'') in mask):
+                            if len(item.agents) > 0:
+                                grid.set(i, j, item.agents[0])
+                            else:
+                                grid.set(i, j, None)
+        
+        mask_by_attr(grid, agent, 'type', getattr(agent, 'hide_item_types', []))
+        mask_by_attr(grid, agent, 'color', getattr(agent, 'hide_item_colors', []))
 
         return grid, vis_mask
 

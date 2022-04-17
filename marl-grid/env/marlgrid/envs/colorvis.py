@@ -8,7 +8,7 @@ def dis_func(x, y, k=1):
     return np.linalg.norm(x - y) / k
 
 
-class FindGoalMultiGrid(MultiGridEnv):
+class ColorVisEnv(MultiGridEnv):
     """
     Environment with two keys and two doors. Must be run with selective grid agents
     """
