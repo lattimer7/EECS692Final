@@ -296,15 +296,42 @@ class FreeDoor(WorldObj):
 
 # This is a special door object that is only unlocked via an environment call.
 class EnvLockedDoor(FreeDoor):
+    class states(IntEnum):
+        open = 1
+        closed = 2
+        locked = 3
+    
+    def __init__(self, reward=0.5, require_open=False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reward = reward
+        self.require_open = require_open
+        self.last_toggling_agent = None
+    
     def toggle(self, agent, pos):
-        return False
-
-    def unlock(self):
         if self.state == self.states.closed:
             self.state = self.states.open
-        elif self.state == self.states.open:
+        elif self.state == self.states.open or self.state == self.states.locked:
             # door can only be opened once
             pass
+        else:
+            raise ValueError(f'?!?!?! EnvLockedDoor in state {self.state}')
+        self.last_toggling_agent = agent
+        return True
+
+    def unlock(self):
+        if self.state == self.states.locked:
+            self.state = self.states.closed if self.require_open else self.states.open
+        elif self.state == self.states.open or self.state == self.states.closed:
+            # door can only be opened once
+            pass
+        else:
+            raise ValueError(f'?!?!?! EnvLockedDoor in state {self.state}')
+    
+    def lock(self):
+        if self.state == self.states.locked:
+            pass
+        elif self.state == self.states.open or self.state == self.states.closed:
+            self.state = self.states.locked
         else:
             raise ValueError(f'?!?!?! EnvLockedDoor in state {self.state}')
 
@@ -320,8 +347,9 @@ class EnvLockedDoor(FreeDoor):
             fill_coords(img, point_in_rect(0.08, 0.92, 0.08, 0.92), c)
             fill_coords(img, point_in_rect(0.12, 0.88, 0.12, 0.88), (0, 0, 0))
 
-            # DON'T Draw door handle
-            #fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
+        # Draw door handle only if we are closed
+        if self.state == self.states.closed:
+            fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
 
 
 class PressurePlate(WorldObj):
@@ -362,6 +390,7 @@ class PressurePlate(WorldObj):
         fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
 
 
+# A color cycler object
 class ColorCyclerBox(WorldObj):
     colors_states = [
         'orange',
@@ -414,6 +443,7 @@ class ColorCyclerBox(WorldObj):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.1), (0,0,0))
 
 
+# A triangle key object
 class StaticCodedTriangle(WorldObj):
     def __init__(self, color='orange', dir=0, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -439,3 +469,106 @@ class StaticCodedTriangle(WorldObj):
         fill_coords(img, outer_fn, COLORS[self.color])
         fill_coords(img, inner_fn, (0,0,0))
 
+
+# A toggleable lever that can be used in place of doors
+# for redbluedoors to make it chainable
+class Lever(WorldObj):
+    class states(IntEnum):
+        on = 1
+        off = 2
+    
+    def can_overlap(self):
+        return False
+    
+    def toggle(self, agent, pos):
+        if self.state == self.states.off:
+            self.state = self.states.on
+        elif self.state == self.states.on:
+            self.state = self.states.off
+        else:
+            raise ValueError(f'?!?!?! Lever in state {self.state}')
+        return True
+        
+    def render(self, img):
+        c = COLORS[self.color]
+
+        if self.state == self.states.on:
+            # Draw an I
+            fill_coords(img, point_in_rect(0.44, 0.56, 0.00, 1.00), c)
+        else:
+            # Draw an O
+            fill_coords(img, point_in_circle(cx=0.5, cy=0.5, r=0.45), c)
+            fill_coords(img, point_in_circle(cx=0.5, cy=0.5, r=0.30), (0,0,0))
+
+
+# Key object imported back from the original marlgrid
+class Key(WorldObj):
+    def can_pickup(self):
+        return True
+
+    def str_render(self, dir=0):
+        return "KK"
+
+    def render(self, img):
+        c = COLORS[self.color]
+
+        # Vertical quad
+        fill_coords(img, point_in_rect(0.50, 0.63, 0.31, 0.88), c)
+
+        # Teeth
+        fill_coords(img, point_in_rect(0.38, 0.50, 0.59, 0.66), c)
+        fill_coords(img, point_in_rect(0.38, 0.50, 0.81, 0.88), c)
+
+        # Ring
+        fill_coords(img, point_in_circle(cx=0.56, cy=0.28, r=0.190), c)
+        fill_coords(img, point_in_circle(cx=0.56, cy=0.28, r=0.064), (0, 0, 0))
+
+
+# Just locked door that can require any key object.
+# This one is unlocked by the agents, then is opened.
+# If required_open is true, then it will require an additional
+# open step, otherwise it will just open immediately from locked
+class LockedDoor(EnvLockedDoor):
+    def __init__(self, key_obj=None, reward=0.5, require_open=False, *args, **kwargs):
+        super().__init__(reward, require_open, *args, **kwargs)
+        self.key_obj = key_obj
+        self.last_toggling_agent = None
+    
+    def toggle(self, agent, pos):
+        if self.state == self.states.locked:  # is locked
+            # If the agent is carrying a key of matching color
+            if (agent.carrying is not None
+                    and agent.carrying == self.key_obj):
+                self.state = self.states.closed if self.require_open else self.states.open
+        elif self.state == self.states.closed:  # is unlocked but closed
+            self.state = self.states.open
+        elif self.state == self.states.open:  # is open
+            pass
+        return True
+
+    def render(self, img):
+        c = COLORS[self.color]
+
+        if self.state == self.states.open:
+            fill_coords(img, point_in_rect(0.88, 1.00, 0.00, 1.00), c)
+            fill_coords(img, point_in_rect(0.92, 0.96, 0.04, 0.96), (0, 0, 0))
+            return
+
+        # Door frame and door
+        if self.state == self.states.locked and self.key_obj is not None:
+            fill_coords(img, point_in_rect(0.00, 1.00, 0.00, 1.00), c)
+            fill_coords(img, point_in_rect(0.06, 0.94, 0.06, 0.94), 0.45 * np.array(c))
+
+            # Draw key slot
+            fill_coords(img, point_in_rect(0.52, 0.75, 0.50, 0.56), c)
+        else:
+            fill_coords(img, point_in_rect(0.00, 1.00, 0.00, 1.00), c)
+            fill_coords(img, point_in_rect(0.04, 0.96, 0.04, 0.96), (0, 0, 0))
+            fill_coords(img, point_in_rect(0.08, 0.92, 0.08, 0.92), c)
+            fill_coords(img, point_in_rect(0.12, 0.88, 0.12, 0.88), (0, 0, 0))
+
+            # Draw door handle
+            fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
+
+
+# TODO: Make keyhole object
