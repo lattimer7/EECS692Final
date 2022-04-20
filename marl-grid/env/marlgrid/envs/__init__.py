@@ -207,7 +207,6 @@ def register_env(
         restrict_actions = False
     elif env_type == 'p':
         env_class = PressurePlateMultiGrid
-        assert n_agents == 2
         restrict_actions = False
     else:
         raise ValueError(f'env type {env_type} not supported')

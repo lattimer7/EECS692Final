@@ -317,7 +317,14 @@ class FreeDoor(WorldObj):
 
 # This is a special door object that is only unlocked via an environment call.
 class EnvLockedDoor(FreeDoor):
+    def __init__(self, reward, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reward = reward
+        self.been_toggled = False
+
+
     def toggle(self, env, pos):
+        self.been_toggled = True
         return False
 
     def unlock(self):
