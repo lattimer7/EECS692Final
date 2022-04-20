@@ -306,10 +306,12 @@ class EnvLockedDoor(FreeDoor):
         self.reward = reward
         self.require_open = require_open
         self.last_toggling_agent = None
+        self.opening_agent = None
     
     def toggle(self, agent, pos):
         if self.state == self.states.closed:
             self.state = self.states.open
+            self.opening_agent = agent
         elif self.state == self.states.open or self.state == self.states.locked:
             # door can only be opened once
             pass
@@ -532,6 +534,8 @@ class LockedDoor(EnvLockedDoor):
     def __init__(self, key_obj=None, reward=0.5, require_open=False, *args, **kwargs):
         super().__init__(reward, require_open, *args, **kwargs)
         self.key_obj = key_obj
+        self.unlocking_agent = None
+        self.opening_agent = None
         self.last_toggling_agent = None
     
     def toggle(self, agent, pos):
@@ -540,10 +544,15 @@ class LockedDoor(EnvLockedDoor):
             if (agent.carrying is not None
                     and agent.carrying == self.key_obj):
                 self.state = self.states.closed if self.require_open else self.states.open
+                # CONSUME ZA KEY
+                agent.carrying = None
+                self.unlocking_agent = agent
         elif self.state == self.states.closed:  # is unlocked but closed
             self.state = self.states.open
+            self.opening_agent = agent
         elif self.state == self.states.open:  # is open
             pass
+        self.last_toggling_agent = agent
         return True
 
     def render(self, img):
@@ -572,3 +581,44 @@ class LockedDoor(EnvLockedDoor):
 
 
 # TODO: Make keyhole object
+class KeyHole(WorldObj):
+    class states(IntEnum):
+        unlocked = 1
+        locked = 2
+    
+    def __init__(self, key_obj=None, reward=0.5, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reward = reward
+        self.key_obj = key_obj
+        self.unlocking_agent = None
+        self.last_toggling_agent = None
+    
+    def can_overlap(self):
+        return True
+    
+    def toggle(self, agent, pos):
+        if self.state == self.states.locked:  # is locked
+            # If the agent is carrying a key of matching color
+            if (agent.carrying is not None
+                    and agent.carrying == self.key_obj):
+                self.state = self.states.unlocked
+                agent.carrying = None  # CONSUME
+                self.unlocking_agent = agent
+        elif self.state == self.states.unlocked:  # is open
+            pass
+        self.last_toggling_agent = agent
+        return True
+
+    # Draw small slot
+    def render(self, img):
+        c = COLORS[self.color]
+        
+        fill_coords(img, point_in_rect(0.20, 0.80, 0.20, 0.80), c)
+        fill_coords(img, point_in_rect(0.26, 0.74, 0.26, 0.74), (0,0,0))
+        
+        # Draw box
+        if self.state == self.states.locked and self.key_obj is not None:
+            # Draw key slot
+            fill_coords(img, point_in_rect(0.52, 0.75, 0.50, 0.56), c)
+        # Don't draw key slot if done.
+
