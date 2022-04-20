@@ -3,10 +3,13 @@ import numpy.random as random
 import sys
 from gym.envs.registration import register as gym_register
 
+from .colorvis import ColorVisEnv
 from .findgoal import FindGoalMultiGrid
 from .redbluedoors import RedBlueDoorsMultiGrid
 from .oneroompuzzle import OneRoomPuzzleMultiGrid
 from .colorvis import ColorBlindMultiGrid
+from ..agents import GridAgentInterface, SelectiveGridAgentInterface
+
 from ..agents import GridAgentInterface
 from ..base import MultiGridEnv
 
@@ -70,9 +73,8 @@ def make_agents(
             n_agents=n_agents,
             is_adversary=1 if i in adv_indices else 0,
             hide_item_colors=c if agent_color is None else agent_color,
-            cant_pick_up = [x for x in colors[:n_agents] if x is not agent_color]
+            cant_pick_up = [x if (agent_color is not None and x is not agent_color) else "" for x in colors[:n_agents]]
         ) for i, c in enumerate(colors[:n_agents])]
-        agents = [
     else:
         agents = [GridAgentInterface(
             color=c if agent_color is None else agent_color,
@@ -237,8 +239,8 @@ def register_env(
         assert n_agents == 2
         assert n_adversaries == 0
         restrict_actions = False
-    elif env_type == 'colorblind':
-        env_class = ColorBlindMultiGrid
+    elif env_type == 'colorvis':
+        env_class = ColorVisEnv
         assert n_agents == 2
         assert n_adversaries == 0
         restrict_actions = False

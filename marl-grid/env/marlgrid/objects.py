@@ -1,5 +1,5 @@
 import numpy as np
-from enum import IntEnum
+from enum import IntEnum, Enum
 from gym_minigrid.rendering import (
     fill_coords,
     point_in_circle,
@@ -87,7 +87,7 @@ class WorldObj(metaclass=RegisteredObjectType):
     def see_behind(self):
         return True
 
-    def toggle(self, env, pos):
+    def toggle(self, agent, pos):
         return False
 
     def encode(self, str_class=False):
@@ -296,15 +296,44 @@ class FreeDoor(WorldObj):
 
 # This is a special door object that is only unlocked via an environment call.
 class EnvLockedDoor(FreeDoor):
-    def toggle(self, env, pos):
-        return False
-
-    def unlock(self):
+    class states(IntEnum):
+        open = 1
+        closed = 2
+        locked = 3
+    
+    def __init__(self, reward=0.5, require_open=False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reward = reward
+        self.require_open = require_open
+        self.last_toggling_agent = None
+        self.opening_agent = None
+    
+    def toggle(self, agent, pos):
         if self.state == self.states.closed:
             self.state = self.states.open
-        elif self.state == self.states.open:
+            self.opening_agent = agent
+        elif self.state == self.states.open or self.state == self.states.locked:
             # door can only be opened once
             pass
+        else:
+            raise ValueError(f'?!?!?! EnvLockedDoor in state {self.state}')
+        self.last_toggling_agent = agent
+        return True
+
+    def unlock(self):
+        if self.state == self.states.locked:
+            self.state = self.states.closed if self.require_open else self.states.open
+        elif self.state == self.states.open or self.state == self.states.closed:
+            # door can only be opened once
+            pass
+        else:
+            raise ValueError(f'?!?!?! EnvLockedDoor in state {self.state}')
+    
+    def lock(self):
+        if self.state == self.states.locked:
+            pass
+        elif self.state == self.states.open or self.state == self.states.closed:
+            self.state = self.states.locked
         else:
             raise ValueError(f'?!?!?! EnvLockedDoor in state {self.state}')
 
@@ -320,8 +349,10 @@ class EnvLockedDoor(FreeDoor):
             fill_coords(img, point_in_rect(0.08, 0.92, 0.08, 0.92), c)
             fill_coords(img, point_in_rect(0.12, 0.88, 0.12, 0.88), (0, 0, 0))
 
-            # DON'T Draw door handle
-            #fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
+        # Draw door handle only if we are closed
+        if self.state == self.states.closed:
+            fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
+
 
 class PressurePlate(WorldObj):
     class states(IntEnum):
@@ -359,3 +390,235 @@ class PressurePlate(WorldObj):
 
     def render(self, img):
         fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
+
+
+# A color cycler object
+class ColorCyclerBox(WorldObj):
+    colors_states = [
+        'orange',
+        'green',
+        'cyan',
+        'purple',
+        'pink',
+        'white',
+    ]
+    def __init__(self, reward=0.5, color='orange', interactable_agents = [], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set the color state
+        self.color = color
+        idx = next(i for i,c in enumerate(self.colors_states) if c == color)
+        self.state = idx
+        self.interactable_agents = interactable_agents
+        self.last_toggling_agent = None
+        self.reward = reward
+        self.disabled = False
+
+    def disable(self):
+        self.disabled = True
+
+    def _get_next_color(self):
+        max = len(self.colors_states)
+        next = (self.state + 1) % max
+        return next
+    
+    def _get_color(self):
+        key = self.colors_states[self.state]
+        return (key, COLORS[key])
+
+    def toggle(self, agent, pos):
+        # See if this is an agent we can actually interact with
+        if next((a for a in self.interactable_agents if a == agent), None) is not None:
+            self.last_toggling_agent = agent
+            self.state = self._get_next_color()
+            self.color = self._get_color()[0]
+        else:
+            return False
+        
+    def can_overlap(self):
+        return True
+    
+    def str_render(self, dir=0):
+        return 'CC'
+    
+    def render(self, img):
+        fill_coords(img, point_in_rect(0.25, 0.75, 0.25, 0.75), self._get_color()[1])
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.1), (0,0,0))
+
+
+# A triangle key object
+class StaticCodedTriangle(WorldObj):
+    def __init__(self, color='orange', dir=0, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set the color state
+        self.color = color
+        self.state = dir
+
+    @property
+    def dir(self):
+        return self.state % 4
+
+    def can_overlap(self):
+        return True
+
+    def str_render(self, dir=0):
+        return 'CT'
+
+    def render(self, img):
+        outer_fn = point_in_triangle((0.24, 0.2), (0.76, 0.50), (0.24, 0.8))
+        outer_fn = rotate_fn(outer_fn, cx=0.5, cy=0.5, theta=1.5 * np.pi * self.dir)
+        inner_fn = point_in_triangle((0.4135, 0.4), (0.5865, 0.50), (0.4135, 0.6))
+        inner_fn = rotate_fn(inner_fn, cx=0.5, cy=0.5, theta=1.5 * np.pi * self.dir)
+        fill_coords(img, outer_fn, COLORS[self.color])
+        fill_coords(img, inner_fn, (0,0,0))
+
+
+# A toggleable lever that can be used in place of doors
+# for redbluedoors to make it chainable
+class Lever(WorldObj):
+    class states(IntEnum):
+        on = 1
+        off = 2
+    
+    def can_overlap(self):
+        return False
+    
+    def toggle(self, agent, pos):
+        if self.state == self.states.off:
+            self.state = self.states.on
+        elif self.state == self.states.on:
+            self.state = self.states.off
+        else:
+            raise ValueError(f'?!?!?! Lever in state {self.state}')
+        return True
+        
+    def render(self, img):
+        c = COLORS[self.color]
+
+        if self.state == self.states.on:
+            # Draw an I
+            fill_coords(img, point_in_rect(0.44, 0.56, 0.00, 1.00), c)
+        else:
+            # Draw an O
+            fill_coords(img, point_in_circle(cx=0.5, cy=0.5, r=0.45), c)
+            fill_coords(img, point_in_circle(cx=0.5, cy=0.5, r=0.30), (0,0,0))
+
+
+# Key object imported back from the original marlgrid
+class Key(WorldObj):
+    def can_pickup(self):
+        return True
+
+    def str_render(self, dir=0):
+        return "KK"
+
+    def render(self, img):
+        c = COLORS[self.color]
+
+        # Vertical quad
+        fill_coords(img, point_in_rect(0.50, 0.63, 0.31, 0.88), c)
+
+        # Teeth
+        fill_coords(img, point_in_rect(0.38, 0.50, 0.59, 0.66), c)
+        fill_coords(img, point_in_rect(0.38, 0.50, 0.81, 0.88), c)
+
+        # Ring
+        fill_coords(img, point_in_circle(cx=0.56, cy=0.28, r=0.190), c)
+        fill_coords(img, point_in_circle(cx=0.56, cy=0.28, r=0.064), (0, 0, 0))
+
+
+# Just locked door that can require any key object.
+# This one is unlocked by the agents, then is opened.
+# If required_open is true, then it will require an additional
+# open step, otherwise it will just open immediately from locked
+class LockedDoor(EnvLockedDoor):
+    def __init__(self, key_obj=None, reward=0.5, require_open=False, *args, **kwargs):
+        super().__init__(reward, require_open, *args, **kwargs)
+        self.key_obj = key_obj
+        self.unlocking_agent = None
+        self.opening_agent = None
+        self.last_toggling_agent = None
+    
+    def toggle(self, agent, pos):
+        if self.state == self.states.locked:  # is locked
+            # If the agent is carrying a key of matching color
+            if (agent.carrying is not None
+                    and agent.carrying == self.key_obj):
+                self.state = self.states.closed if self.require_open else self.states.open
+                # CONSUME ZA KEY
+                agent.carrying = None
+                self.unlocking_agent = agent
+        elif self.state == self.states.closed:  # is unlocked but closed
+            self.state = self.states.open
+            self.opening_agent = agent
+        elif self.state == self.states.open:  # is open
+            pass
+        self.last_toggling_agent = agent
+        return True
+
+    def render(self, img):
+        c = COLORS[self.color]
+
+        if self.state == self.states.open:
+            fill_coords(img, point_in_rect(0.88, 1.00, 0.00, 1.00), c)
+            fill_coords(img, point_in_rect(0.92, 0.96, 0.04, 0.96), (0, 0, 0))
+            return
+
+        # Door frame and door
+        if self.state == self.states.locked and self.key_obj is not None:
+            fill_coords(img, point_in_rect(0.00, 1.00, 0.00, 1.00), c)
+            fill_coords(img, point_in_rect(0.06, 0.94, 0.06, 0.94), 0.45 * np.array(c))
+
+            # Draw key slot
+            fill_coords(img, point_in_rect(0.52, 0.75, 0.50, 0.56), c)
+        else:
+            fill_coords(img, point_in_rect(0.00, 1.00, 0.00, 1.00), c)
+            fill_coords(img, point_in_rect(0.04, 0.96, 0.04, 0.96), (0, 0, 0))
+            fill_coords(img, point_in_rect(0.08, 0.92, 0.08, 0.92), c)
+            fill_coords(img, point_in_rect(0.12, 0.88, 0.12, 0.88), (0, 0, 0))
+
+            # Draw door handle
+            fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
+
+
+# TODO: Make keyhole object
+class KeyHole(WorldObj):
+    class states(IntEnum):
+        unlocked = 1
+        locked = 2
+    
+    def __init__(self, key_obj=None, reward=0.5, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reward = reward
+        self.key_obj = key_obj
+        self.unlocking_agent = None
+        self.last_toggling_agent = None
+    
+    def can_overlap(self):
+        return True
+    
+    def toggle(self, agent, pos):
+        if self.state == self.states.locked:  # is locked
+            # If the agent is carrying a key of matching color
+            if (agent.carrying is not None
+                    and agent.carrying == self.key_obj):
+                self.state = self.states.unlocked
+                agent.carrying = None  # CONSUME
+                self.unlocking_agent = agent
+        elif self.state == self.states.unlocked:  # is open
+            pass
+        self.last_toggling_agent = agent
+        return True
+
+    # Draw small slot
+    def render(self, img):
+        c = COLORS[self.color]
+        
+        fill_coords(img, point_in_rect(0.20, 0.80, 0.20, 0.80), c)
+        fill_coords(img, point_in_rect(0.26, 0.74, 0.26, 0.74), (0,0,0))
+        
+        # Draw box
+        if self.state == self.states.locked and self.key_obj is not None:
+            # Draw key slot
+            fill_coords(img, point_in_rect(0.52, 0.75, 0.50, 0.56), c)
+        # Don't draw key slot if done.
+
