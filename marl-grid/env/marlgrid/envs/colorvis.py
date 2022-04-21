@@ -2,18 +2,13 @@ import numpy as np
 
 from ..base import MultiGridEnv, MultiGrid
 from ..objects import Goal, Wall
-from gym-minigrid.minigrid import Door, Key
+from gym_minigrid.minigrid import Door, Key
 
 
 def dis_func(x, y, k=1):
     return np.linalg.norm(x - y) / k
 
-
-<<<<<<< HEAD
-class ColorBlindMultiGrid(MultiGridEnv):
-=======
 class ColorVisEnv(MultiGridEnv):
->>>>>>> d2c23f4704240d80840a5b931442edff1976b037
     """
     Environment with two keys and two doors. Must be run with selective grid agents
     """
