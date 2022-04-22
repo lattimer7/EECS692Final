@@ -7,6 +7,7 @@ from .colorvis import ColorVisEnv
 from .findgoal import FindGoalMultiGrid
 from .redbluedoors import RedBlueDoorsMultiGrid
 from .oneroompuzzle import OneRoomPuzzleMultiGrid
+from .tworoompuzzle import TwoRoomPuzzleMultiGrid
 from ..agents import GridAgentInterface, SelectiveGridAgentInterface
 from ..base import MultiGridEnv
 
@@ -233,6 +234,11 @@ def register_env(
         restrict_actions = False
     elif env_type == 'oneroompuzzle':
         env_class = OneRoomPuzzleMultiGrid
+        assert n_agents == 2
+        assert n_adversaries == 0
+        restrict_actions = False
+    elif env_type == 'tworoompuzzle':
+        env_class = TwoRoomPuzzleMultiGrid
         assert n_agents == 2
         assert n_adversaries == 0
         restrict_actions = False

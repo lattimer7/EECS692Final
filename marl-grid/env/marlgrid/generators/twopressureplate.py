@@ -24,7 +24,7 @@ class TwoPressurePlateGame(BasePuzzleGame):
         # Generate the locations of the two pressure plates & the location
         # of the exiting door & store to self.objs and self.exits.
         exit = self._sample_exit_walls()
-        self.exit_door = EnvLockedDoor(color=random.choice(list(COLORS)), state=EnvLockedDoor.states.closed)
+        self.exit_door = EnvLockedDoor(color=random.choice(list(COLORS)), state=EnvLockedDoor.states.locked)
 
         self.pressureplates = [
             PressurePlate(),
@@ -32,10 +32,10 @@ class TwoPressurePlateGame(BasePuzzleGame):
         ]
 
         # For now just generate two random positions
-        loc1 = (np.random.randint(1, self.width - 1), np.random.randint(1, self.height - 1))
-        loc2 = (np.random.randint(1, self.width - 1), np.random.randint(1, self.height - 1))
+        loc1 = (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
+        loc2 = (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
         while loc2[0] == loc1[0] and loc2[1] == loc1[1]:
-            loc2 = (np.random.randint(1, self.width - 1), np.random.randint(1, self.height - 1))
+            loc2 = (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
         
         # store the objects
         self.objs[exit] = self.exit_door
@@ -49,7 +49,7 @@ class TwoPressurePlateGame(BasePuzzleGame):
         rew = 0
         if self.pressureplates[0].state == PressurePlate.states.active \
             and self.pressureplates[1].state == PressurePlate.states.active \
-            and self.exit_door.state == EnvLockedDoor.states.closed:
+            and self.exit_door.state == EnvLockedDoor.states.locked:
             self.exit_door.unlock()
             rew = 1
         

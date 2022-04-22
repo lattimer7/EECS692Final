@@ -42,7 +42,7 @@ def create_grid_world_env(env_cfg):
             'seed': env_cfg.seed,
             'active_after_done': env_cfg.active_after_done,
             'discrete_position': env_cfg.discrete_position,
-            'generators': [CycleBoxColorGameGenerator(10, 10)]
+            'generators': [TwoPressurePlateGameGenerator(10, 10)]
         },
         env_type=env_cfg.env_type)
 
@@ -53,7 +53,7 @@ def get_env_name(env_cfg):
     """
     Automatically generate env name from env configs.
     """
-    assert env_cfg.env_type == 'oneroompuzzle'
+    # assert env_cfg.env_type == 'tworoompuzzle'
     name = f'MarlGridDoors-'
 
     if env_cfg.num_blind_agents > 0:

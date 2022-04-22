@@ -979,9 +979,15 @@ class MultiGridEnv(gym.Env):
                 for k, view in enumerate(col_views):
                     offset = f_offset(view) + agent_col_padding_px
                     offset[0] += k * target_partial_height
+                    temp = col[
+                    offset[0]:offset[0] + view.shape[0],
+                    offset[1]:offset[1] + view.shape[1], :].shape
                     col[
                     offset[0]:offset[0] + view.shape[0],
-                    offset[1]:offset[1] + view.shape[1], :] = view
+                    offset[1]:offset[1] + view.shape[1], :] = view[:temp[0], :temp[1], :temp[2]]
+                    # col[
+                    # offset[0]:offset[0] + view.shape[0],
+                    # offset[1]:offset[1] + view.shape[1], :] = view
                 cols.append(col)
 
             img = np.concatenate((img, *cols), axis=1)

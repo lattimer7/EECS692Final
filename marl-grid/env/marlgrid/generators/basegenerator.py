@@ -36,6 +36,7 @@ class BasePuzzleGame:
         self.width = width
         self.height = height
         self.env = env
+        self.np_random = env.np_random
         self.exit_walls = exit_walls
         self.config = config
         self.objs = {}
@@ -77,19 +78,19 @@ class BasePuzzleGame:
         # get the size of the space to sample
         if len(self.exit_walls) == 1 and self.exit_walls[0] == WALL_SIDE.ALL:
             # treat this case specifically
-            edge = np.random.randint(4)
+            edge = self.np_random.randint(4)
         else:
             # sample the rest
-            edge = np.random.randint(len(self.exit_walls))
+            edge = self.np_random.randint(len(self.exit_walls))
             edge = int(self.exit_walls[edge])
         # This assumes the origin is the top left!
-        if edge % 2:
+        if edge % 2 == 0:
             # left and right case
-            loc = np.random.randint(1, self.height-1)
+            loc = self.np_random.randint(1, self.height-1)
             return ((1 - edge//2)*(self.width-1), loc)
         else:
             # top and bottom case
-            loc = np.random.randint(1, self.width-1)
+            loc = self.np_random.randint(1, self.width-1)
             return (loc, (1 - edge//2)*(self.height-1))
 
 

@@ -34,7 +34,7 @@ class CycleBoxColorGame(BasePuzzleGame):
         self.exit_door = EnvLockedDoor(color=random.choice(list(COLORS)), state=EnvLockedDoor.states.closed)
 
         # Generate 4 directional sets
-        dirs = np.random.randint(4, size=self.code_size)
+        dirs = self.np_random.randint(4, size=self.code_size)
         # Generate 4 colors
         colors = [random.choice(ColorCyclerBox.colors_states) for _ in range(self.code_size)]
         # Select 1 agent to do the toggling and set obfuscation
@@ -47,7 +47,7 @@ class CycleBoxColorGame(BasePuzzleGame):
         # The center will always be the coded triangle
         # RIGHT DOWN LEFT UP
         def loc_gen(dir):
-            loc1 = (np.random.randint(1, self.width - 1), np.random.randint(1, self.height - 1))
+            loc1 = (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
             if dir % 2 == 0:
                 loc2 = (loc1[0] - (dir - 1), loc1[1])
             else:

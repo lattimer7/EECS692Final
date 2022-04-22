@@ -2,10 +2,12 @@ import numpy as np
 
 from ..base import MultiGridEnv, MultiGrid
 from ..objects import Wall
+from ..generators import WALL_SIDE
 
-class OneRoomPuzzleMultiGrid(MultiGridEnv):
+
+class TwoRoomPuzzleMultiGrid(MultiGridEnv):
     """
-    Single puzzle room environment, where the puzzles are
+    Two puzzle room environment, where the puzzles are
     selected from the provided generator classes. Each of these
     generators specifies how a room would be constructed as well
     as how the 
@@ -21,46 +23,97 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
         self.size = config.get('grid_size')
         # TODO: Change to be loaded by name from generators, for sake of
         self.generators = config.get('generators')
+        
+        # These width's and height's are completely ignored down the line
         width = self.size
         height = self.size
-
-        super(OneRoomPuzzleMultiGrid, self).__init__(config, width, height)
+        super(TwoRoomPuzzleMultiGrid, self).__init__(config, width, height)
 
     def _gen_grid(self, width, height):
         """Generate grid without agents."""
+
+        # Generate a random orientation and update the
+        # overall width and height based on those values
+        dir = self.np_random.randint(4)
+        # RIGHT DOWN LEFT UP
+
+        # Compute the width & height
+        # Because we have an overlap of 1 multiply by
+        # the size - 1 then add the extra 1 back
+        unit = (self.size - 1)
+        width = unit * (2 - dir % 2) + 1
+        height = unit * (dir % 2 + 1) + 1
+        self.width = width
+        self.height = height
+        self.max_dis = np.sqrt(np.sum(np.square([self.width, self.height])))
+
+        # Compute the origin and exit cells (left, top)
+        origin_cell = (unit * (dir == 2), unit * (dir == 3))
+        exit_cell   = (unit * (dir == 0), unit * (dir == 1))
 
         # Create an empty grid
         self.grid = MultiGrid((width, height))
 
         # Generate the grid walls
-        self.grid.wall_rect(0, 0, width, height)
+        self.grid.wall_rect(*origin_cell, self.size, self.size)
+        self.grid.wall_rect(*exit_cell, self.size, self.size)
 
         # Sample a random generator
-        gen_id = np.random.randint(len(self.generators))
+        gen_id = np.random.randint(len(self.generators), size=2)
 
+        # Exit cell exit options
+        entrance_side = (dir-2)%4
+        exit_sides = list(range(4))
+        exit_sides.remove(entrance_side)
+        # Then valid exits
+        exit_walls = [[WALL_SIDE(dir)],
+                      [WALL_SIDE(d) for d in exit_sides]]
+        
         # Get the generator objects and update mission
         # TODO: will this update the mission?
-        self.current_game = self.generators[gen_id].generate(self)
-        self.mission = self.current_game.mission
+        self.games = [self.generators[i].generate(self, exit_walls[i]) for i in gen_id]
+        self.mission = "TwoRoom: " + \
+                        self.games[0].mission + "; " + \
+                        self.games[1].mission
 
         # Add all objects that are not boundary walls.
-        objs, exits = self.current_game.get_objs()
-        for pos, obj in objs.items():
-            # TODO: Will this skip all boundary wall types?
-            if isinstance(obj, Wall):
-                if pos[0] != 0            \
-                    and pos[1] != 0       \
-                    and pos[0] != width-1 \
-                    and pos[1] != height-1:
-                        continue
-            # Otherwise place the object into the grid.
-            self.grid.set(pos[0], pos[1], obj)
+        def place_obj(grid, origin, game):
+            objs, exits = game.get_objs()
+            for pos, obj in objs.items():
+                # TODO: Will this skip all boundary wall types?
+                if isinstance(obj, Wall):
+                    if pos[0] != 0            \
+                        and pos[1] != 0       \
+                        and pos[0] != self.size-1 \
+                        and pos[1] != self.size-1:
+                            continue
+                # Otherwise place the object into the grid.
+                grid.set(origin[0] + pos[0], origin[1] + pos[1], obj)
+            # The final set of exits is also the goal, so leave that there.
+            exit = exits[0]
+            exit = (origin[0] + exit[0], origin[1] + exit[1])
+            return exit
+        
+        # Place the objects for both games
+        place_obj(self.grid, origin_cell, self.games[0])
+        exit = place_obj(self.grid, exit_cell, self.games[1])
 
-        # We set our goal to the exit
-        # self.goal_pos = exits[0]
-        # print(self.goal_pos)
+        # Change the way that agents spawn here
+        # and change the spawn delay so that they
+        # cannot be overwritten in the base environment
+        # Modify the spawn kwargs to work
+        agent_spawn_kwargs = self.agent_spawn_kwargs
+        top = getattr(agent_spawn_kwargs, 'top', (0,0))
+        size = getattr(agent_spawn_kwargs, 'size', (self.size, self.size))
+        agent_spawn_kwargs['top'] = (top[0] + origin_cell[0], top[1] + origin_cell[1])
+        agent_spawn_kwargs['size'] = (min(self.size, size[0]), min(self.size, size[1]))
+        assert(top[0] < self.size and top[1] < self.size)
+        for agent in self.agents:
+            self.place_obj(agent, **agent_spawn_kwargs)
+            agent.activate()
+            agent.spawn_delay = -1
 
-        return exits[0]
+        return exit
     
     def _get_reward(self, rwd, agent_no):
         step_rewards = np.zeros((len(self.agents, )), dtype=float)
@@ -83,9 +136,10 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
                                 axis=0),  # (N, 1)
         }
         # Get generator obs
-        room_obs = self.current_game.gen_room_obs()
+        room1_obs = self.games[0].gen_room_obs()
+        room2_obs = self.games[1].gen_room_obs()
         # merge the two (assume this is okay for now)
-        return {**obs, **room_obs}
+        return {**obs, **room1_obs, **room2_obs}
 
     def reset(self):
         obs_dict = MultiGridEnv.reset(self)
@@ -104,7 +158,12 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
         obs_dict, rew_dict, _, info_dict = MultiGridEnv.step(self, action_dict)
 
         # Assume that the update call needs to be made
-        room_rew, room_info = self.current_game.update()
+        room_rew = np.zeros((len(self.agents, )), dtype=float)
+        room_info = {}
+        for game in self.games:
+            rew, info = game.update()
+            room_rew += rew
+            room_info = {**room_info, **info}
 
         # See if all agents made it to the goal or if we have timeout
         done = [self.agents[i].at_pos(self.goal_pos) for i in range(self.num_agents)]
