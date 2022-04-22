@@ -3,7 +3,6 @@ import numpy.random as random
 import sys
 from gym.envs.registration import register as gym_register
 
-from .colorvis import ColorVisEnv
 from .findgoal import FindGoalMultiGrid
 from .redbluedoors import RedBlueDoorsMultiGrid
 from .oneroompuzzle import OneRoomPuzzleMultiGrid
