@@ -121,6 +121,6 @@ class ColorBlindMultiGrid(MultiGridEnv):
             'comm': obs_dict['global']['comm_act'].tolist(),
             'env_act': obs_dict['global']['env_act'].tolist(),
             't': self.step_count,
-            'red_door_opened_now': red_door_opened_now,
+            # 'red_door_opened_now': red_door_opened_now,
         }
         return obs_dict, rew_dict, done_dict, info_dict

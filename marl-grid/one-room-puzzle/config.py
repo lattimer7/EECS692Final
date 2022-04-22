@@ -19,12 +19,12 @@ def get_env_cfg():
 
     config.seed = 1
 
-    config.env_type = 'tworoompuzzle'
+    config.env_type = 'oneroompuzzle'
 
     config.num_agents = 2
     config.num_adversaries = 0
 
-    config.max_steps = 2048
+    config.max_steps = 512
     config.grid_size = 10
     config.observation_style = 'dict'
     config.observe_position = False

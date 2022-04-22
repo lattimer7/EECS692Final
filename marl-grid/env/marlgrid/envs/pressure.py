@@ -1,7 +1,7 @@
 import numpy as np
 
 from ..base import MultiGridEnv, MultiGrid
-from ..objects import FreeDoor, PressurePlate, EnvLockedDoor
+from ..objects import PressurePlate, EnvLockedDoor
 
 
 class PressurePlateMultiGrid(MultiGridEnv):
@@ -29,7 +29,7 @@ class PressurePlateMultiGrid(MultiGridEnv):
         # Generate the grid walls
         self.grid.wall_rect(0, 0, width, height)
 
-        self.red_door = EnvLockedDoor(color='red', state=FreeDoor.states.locked)
+        self.red_door = EnvLockedDoor(color='red', state=EnvLockedDoor.states.locked)
 
         self.pressure_plate = PressurePlate(0.5, color='orange')
 

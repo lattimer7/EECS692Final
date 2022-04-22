@@ -22,6 +22,7 @@ class CycleBoxColorGame(BasePuzzleGame):
 
     def __init__(self, width: int, height: int, env, exit_walls: List[WALL_SIDE], config: dict):
         self.code_size = 4
+        self.color_list = []
         # Call the super class
         super().__init__(width, height, env, exit_walls, config)
         self.most_right = 0
