@@ -1,3 +1,4 @@
+from faulthandler import disable
 import numpy as np
 from enum import IntEnum, Enum
 from gym_minigrid.rendering import (
@@ -478,17 +479,37 @@ class Lever(WorldObj):
     class states(IntEnum):
         on = 1
         off = 2
+        disabled = 3
+    
+    def __init__(self, reward=0.5, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reward = reward
+        self.frozen = False
+        self.last_toggling_agent = None
+        self.state = self.states.off
+    
+    def freeze(self):
+        self.frozen = True
+
+    def disable(self):
+        self.state = self.states.disabled
+
+    def enable(self):
+        self.state = self.states.off
     
     def can_overlap(self):
         return False
     
     def toggle(self, agent, pos):
+        if (self.state == self.states.disabled) or self.frozen:
+            return False
         if self.state == self.states.off:
             self.state = self.states.on
         elif self.state == self.states.on:
             self.state = self.states.off
         else:
             raise ValueError(f'?!?!?! Lever in state {self.state}')
+        self.last_toggling_agent = agent
         return True
         
     def render(self, img):
@@ -501,10 +522,26 @@ class Lever(WorldObj):
             # Draw an O
             fill_coords(img, point_in_circle(cx=0.5, cy=0.5, r=0.45), c)
             fill_coords(img, point_in_circle(cx=0.5, cy=0.5, r=0.30), (0,0,0))
+        if self.state == self.states.disabled:
+            # Draw an X
+            x_fn = point_in_rect(0.40, 0.60, 0.00, 1.00)
+            fill_coords(img, rotate_fn(x_fn, cx=0.5, cy=0.5, theta=np.pi/4), COLORS['red'])
+            fill_coords(img, rotate_fn(x_fn, cx=0.5, cy=0.5, theta=3*np.pi/4), COLORS['red'])
 
 
 # Key object imported back from the original marlgrid
 class Key(WorldObj):
+    unique_id = 0
+    id_wraparound = 100
+
+    def __init__(self, key_obj=None, reward=0.5, *args, **kwargs):
+        self.unique_id = KeyHole.unique_id = (KeyHole.unique_id + 1) % KeyHole.id_wraparound
+        super().__init__(*args, **kwargs)
+        
+    @property
+    def type(self):
+        return self.__class__.__name__ + self.unique_id
+
     def can_pickup(self):
         return True
 
@@ -582,17 +619,25 @@ class LockedDoor(EnvLockedDoor):
 
 # TODO: Make keyhole object
 class KeyHole(WorldObj):
+    unique_id = 0
+    id_wraparound = 100
+
     class states(IntEnum):
         unlocked = 1
         locked = 2
     
     def __init__(self, key_obj=None, reward=0.5, *args, **kwargs):
+        self.unique_id = KeyHole.unique_id = (KeyHole.unique_id + 1) % KeyHole.id_wraparound
         super().__init__(*args, **kwargs)
         self.reward = reward
         self.key_obj = key_obj
         self.unlocking_agent = None
         self.last_toggling_agent = None
     
+    @property
+    def type(self):
+        return self.__class__.__name__ + self.unique_id
+
     def can_overlap(self):
         return True
     

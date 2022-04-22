@@ -33,9 +33,9 @@ class SinglePressurePlateGame(BasePuzzleGame):
         loc = (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
 
         # store the objects
-        self.objs[exit] = self.exit_door
-        self.objs[loc] = self.pressureplate
-        self.exits = [exit]
+        self._set(*exit, self.exit_door)
+        self._set(*loc, self.pressureplate)
+        self.exits = [self.exit_door]
 
     def update(self):
         # Check the states of the two pressure plates, and unlock the door

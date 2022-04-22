@@ -74,22 +74,21 @@ class CycleBoxColorGame(BasePuzzleGame):
             color2 = rng_exclude_color(color)
             self.codepairs.append(
                 (StaticCodedTriangle(color=color, dir=dir),
-                ColorCyclerBox(color=color2, interactable_agents=[choice_agent]),
-                [0,0])
+                ColorCyclerBox(color=color2, interactable_agents=[choice_agent]))
             )
             # Get a location
             loc = loc_gen(dir)
             while not loc_valid(loc): loc = loc_gen(dir)
             # Place it
-            self.objs[loc[0]] = self.codepairs[-1][0]
-            self.objs[loc[1]] = self.codepairs[-1][1]
+            self._set(*loc[0], self.codepairs[-1][0])
+            self._set(*loc[1], self.codepairs[-1][1])
             # and save another reference to the triangle location
-            self.codepairs[-1][2][0] = loc[0][0]
-            self.codepairs[-1][2][1] = loc[0][1]
+            # self.codepairs[-1][2][0] = loc[0][0]
+            # self.codepairs[-1][2][1] = loc[0][1]
 
         # save the exit
         self.objs[exit] = self.exit_door
-        self.exits = [exit]
+        self.exits = [self.exit_door]
 
     def update(self):
         # Check the states of the codepairs and give a reward if the right
@@ -100,7 +99,7 @@ class CycleBoxColorGame(BasePuzzleGame):
 
         # Give reward for (first-time) correct box toggles
         num_right = 0
-        for code,box,loc in self.codepairs:
+        for code,box in self.codepairs:
             if code.color == box.color:
                 if box.reward > 0:
                     self.rewarded_agents[box] = []
@@ -113,7 +112,7 @@ class CycleBoxColorGame(BasePuzzleGame):
                             rew[i] += box.reward
                             self.rewarded_agents[box].append(i)
                         # all other agents in view of code will get the reward
-                        if a.in_view(*loc):
+                        if a.in_view(*code.pos):
                             rew[i] += box.reward
                             self.rewarded_agents[box].append(i)
                     box.reward = -box.reward

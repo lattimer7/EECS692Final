@@ -24,7 +24,7 @@ def get_env_cfg():
     config.num_agents = 2
     config.num_adversaries = 0
 
-    config.max_steps = 512
+    config.max_steps = 1024
     config.grid_size = 10
     config.observation_style = 'dict'
     config.observe_position = False

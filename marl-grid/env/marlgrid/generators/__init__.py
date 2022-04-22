@@ -2,3 +2,4 @@ from .twopressureplate import TwoPressurePlateGameGenerator
 from .cycleboxcolor import CycleBoxColorGameGenerator
 from .basegenerator import WALL_SIDE
 from .singlepressureplate import SinglePressurePlateGameGenerator
+from .orderedlevers import ColorOrderedLeversGameGenerator

@@ -55,12 +55,13 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
                         continue
             # Otherwise place the object into the grid.
             self.grid.set(pos[0], pos[1], obj)
+            obj.pos = pos
 
         # We set our goal to the exit
         # self.goal_pos = exits[0]
         # print(self.goal_pos)
 
-        return exits[0]
+        return exits[0].pos
     
     def _get_reward(self, rwd, agent_no):
         step_rewards = np.zeros((len(self.agents, )), dtype=float)

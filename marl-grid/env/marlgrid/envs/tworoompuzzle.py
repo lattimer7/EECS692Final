@@ -88,15 +88,15 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
                         and pos[1] != self.size-1:
                             continue
                 # Otherwise place the object into the grid.
-                grid.set(origin[0] + pos[0], origin[1] + pos[1], obj)
+                new_pos = (origin[0] + pos[0], origin[1] + pos[1])
+                grid.set(*new_pos, obj)
+                obj.pos = new_pos
             # The final set of exits is also the goal, so leave that there.
-            exit = exits[0]
-            exit = (origin[0] + exit[0], origin[1] + exit[1])
-            return exit
+            return exits
         
         # Place the objects for both games
         place_obj(self.grid, origin_cell, self.games[0])
-        exit = place_obj(self.grid, exit_cell, self.games[1])
+        exits = place_obj(self.grid, exit_cell, self.games[1])
 
         # Change the way that agents spawn here
         # and change the spawn delay so that they
@@ -113,7 +113,7 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
             agent.activate()
             agent.spawn_delay = -1
 
-        return exit
+        return exits[0].pos
     
     def _get_reward(self, rwd, agent_no):
         step_rewards = np.zeros((len(self.agents, )), dtype=float)
