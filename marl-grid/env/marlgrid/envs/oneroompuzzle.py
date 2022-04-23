@@ -21,6 +21,9 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
         self.size = config.get('grid_size')
         # TODO: Change to be loaded by name from generators, for sake of
         self.generators = config.get('generators')
+
+        self.exit_color = 'green'
+
         width = self.size
         height = self.size
 
@@ -36,7 +39,7 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
         self.grid.wall_rect(0, 0, width, height)
 
         # Sample a random generator
-        gen_id = np.random.randint(len(self.generators))
+        gen_id = self.np_random.randint(len(self.generators))
 
         # Get the generator objects and update mission
         # TODO: will this update the mission?
@@ -60,6 +63,8 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
         # We set our goal to the exit
         # self.goal_pos = exits[0]
         # print(self.goal_pos)
+        # Set the exit color
+        exits[0].color = 'green'
 
         return exits[0].pos
     

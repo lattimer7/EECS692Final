@@ -2,7 +2,6 @@ from .basegenerator import WALL_SIDE, BasePuzzleGame, BasePuzzleGameGenerator
 from ..objects import EnvLockedDoor, COLORS, PressurePlate
 from typing import List
 import numpy as np
-import random
 
 class TwoPressurePlateGame(BasePuzzleGame):
     """
@@ -24,7 +23,7 @@ class TwoPressurePlateGame(BasePuzzleGame):
         # Generate the locations of the two pressure plates & the location
         # of the exiting door & store to self.objs and self.exits.
         exit = self._sample_exit_walls()
-        self.exit_door = EnvLockedDoor(color=random.choice(list(COLORS)), state=EnvLockedDoor.states.locked)
+        self.exit_door = EnvLockedDoor(color=self.np_random.choice(list(COLORS)), state=EnvLockedDoor.states.locked)
 
         self.pressureplates = [
             PressurePlate(),

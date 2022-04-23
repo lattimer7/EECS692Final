@@ -2,7 +2,6 @@ from .basegenerator import WALL_SIDE, BasePuzzleGame, BasePuzzleGameGenerator
 from ..objects import EnvLockedDoor, COLORS, StaticCodedTriangle, ColorCyclerBox
 from typing import List
 import numpy as np
-import random
 
 class CycleBoxColorGame(BasePuzzleGame):
     """
@@ -21,7 +20,7 @@ class CycleBoxColorGame(BasePuzzleGame):
     mission = 'match the color of the boxes to their corresponding triangles'
 
     def __init__(self, width: int, height: int, env, exit_walls: List[WALL_SIDE], config: dict):
-        self.code_size = 4
+        self.code_size = 2
         self.color_list = []
         # Call the super class
         super().__init__(width, height, env, exit_walls, config)
@@ -32,17 +31,29 @@ class CycleBoxColorGame(BasePuzzleGame):
         # Generate the locations of the two pressure plates & the location
         # of the exiting door & store to self.objs and self.exits.
         exit = self._sample_exit_walls()
-        self.exit_door = EnvLockedDoor(color=random.choice(list(COLORS)), state=EnvLockedDoor.states.closed)
+        self.exit_door = EnvLockedDoor(color=self.np_random.choice(list(COLORS)), state=EnvLockedDoor.states.locked)
 
         # Generate 4 directional sets
         dirs = self.np_random.randint(4, size=self.code_size)
         # Generate 4 colors
-        colors = [random.choice(ColorCyclerBox.colors_states) for _ in range(self.code_size)]
-        # Select 1 agent to do the toggling and set obfuscation
+        colors = [self.np_random.choice(ColorCyclerBox.colors_states) for _ in range(self.code_size)]
+        # Select 1 agent to do the toggling and set obfuscation (if not set already)
+        colorboxtype = ColorCyclerBox().type
+        codedtriangletype = StaticCodedTriangle().type
+        already_set = False
         for agent in self.env.agents:
-            agent.hide_item_types = [ColorCyclerBox().type]
-        choice_agent = random.choice(self.env.agents)
-        choice_agent.hide_item_types = [StaticCodedTriangle().type]
+            if colorboxtype in agent.hide_item_types:
+                already_set = True
+                break
+            agent.hide_item_types = [colorboxtype]
+        if not already_set:
+            choice_agent = self.np_random.choice(self.env.agents)
+            choice_agent.hide_item_types = [codedtriangletype]
+        else:
+            for agent in self.env.agents:
+                if codedtriangletype in agent.hide_item_types:
+                    choice_agent = agent
+                    break
 
 
         # The center will always be the coded triangle
@@ -64,8 +75,8 @@ class CycleBoxColorGame(BasePuzzleGame):
             return False
         
         def rng_exclude_color(color):
-            ret = random.choice(ColorCyclerBox.colors_states)
-            while color == ret: ret = random.choice(ColorCyclerBox.colors_states)
+            ret = self.np_random.choice(ColorCyclerBox.colors_states)
+            while color == ret: ret = self.np_random.choice(ColorCyclerBox.colors_states)
             return ret
 
         # Create the objects (4 colors) and save them
@@ -87,7 +98,7 @@ class CycleBoxColorGame(BasePuzzleGame):
             # self.codepairs[-1][2][1] = loc[0][1]
 
         # save the exit
-        self.objs[exit] = self.exit_door
+        self._set(*exit, self.exit_door)
         self.exits = [self.exit_door]
 
     def update(self):
@@ -115,7 +126,7 @@ class CycleBoxColorGame(BasePuzzleGame):
                         if a.in_view(*code.pos):
                             rew[i] += box.reward
                             self.rewarded_agents[box].append(i)
-                    box.reward = -box.reward
+                    box.reward = -box.reward/2
                 num_right += 1
             else:
                 if box.reward < 0:
@@ -132,10 +143,10 @@ class CycleBoxColorGame(BasePuzzleGame):
 
         # If all the boxes are right, give another reward,
         # unlock the door, and disable all toggles
-        if num_right == self.code_size and self.exit_door.state == EnvLockedDoor.states.closed:
+        if num_right == self.code_size and self.exit_door.state == EnvLockedDoor.states.locked:
             rew += 1
             self.exit_door.unlock()
-            for _,box,_ in self.codepairs:
+            for _,box in self.codepairs:
                 box.disable()
         
         return rew, {}

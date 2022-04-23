@@ -43,7 +43,12 @@ def create_grid_world_env(env_cfg):
             'seed': env_cfg.seed,
             'active_after_done': env_cfg.active_after_done,
             'discrete_position': env_cfg.discrete_position,
-            'generators': [ColorBlindGameGenerator(10, 10)]
+            'generators': [ColorBlindGameGenerator(10, 10),
+                           TwoPressurePlateGameGenerator(10, 10),
+                           CycleBoxColorGameGenerator(10, 10),
+                           SinglePressurePlateGameGenerator(10, 10),
+                           ColorOrderedLeversGameGenerator(10, 10),
+                           ColorBlindGameGenerator(10, 10)]
         },
         env_type=env_cfg.env_type)
 

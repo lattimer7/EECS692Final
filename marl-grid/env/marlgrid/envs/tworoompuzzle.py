@@ -23,6 +23,9 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
         self.size = config.get('grid_size')
         # TODO: Change to be loaded by name from generators, for sake of
         self.generators = config.get('generators')
+
+        self.intermediate_color = 'blue'
+        self.exit_color = 'green'
         
         # These width's and height's are completely ignored down the line
         width = self.size
@@ -59,7 +62,7 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
         self.grid.wall_rect(*exit_cell, self.size, self.size)
 
         # Sample a random generator
-        gen_id = np.random.randint(len(self.generators), size=2)
+        gen_id = self.np_random.randint(len(self.generators), size=2)
 
         # Exit cell exit options
         entrance_side = (dir-2)%4
@@ -91,6 +94,8 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
                 new_pos = (origin[0] + pos[0], origin[1] + pos[1])
                 grid.set(*new_pos, obj)
                 obj.pos = new_pos
+            for exit in exits:
+                exit.color = self.intermediate_color
             # The final set of exits is also the goal, so leave that there.
             return exits
         
@@ -113,6 +118,8 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
             agent.activate()
             agent.spawn_delay = -1
 
+        # Set the exit color
+        exits[0].color = self.exit_color
         return exits[0].pos
     
     def _get_reward(self, rwd, agent_no):

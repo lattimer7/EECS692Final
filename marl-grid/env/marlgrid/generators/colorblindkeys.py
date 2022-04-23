@@ -2,7 +2,6 @@ from .basegenerator import WALL_SIDE, BasePuzzleGame, BasePuzzleGameGenerator
 from ..objects import EnvLockedDoor, COLORS, Key, KeyHole
 from typing import List
 import numpy as np
-import random
 
 class ColorBlindGame(BasePuzzleGame):
     """
@@ -31,7 +30,7 @@ class ColorBlindGame(BasePuzzleGame):
         # Generate the locations of the two pressure plates & the location
         # of the exiting door & store to self.objs and self.exits.
         exit = self._sample_exit_walls()
-        self.exit_door = EnvLockedDoor(color=random.choice(list(COLORS)), state=EnvLockedDoor.states.locked)
+        self.exit_door = EnvLockedDoor(color=self.np_random.choice(list(COLORS)), state=EnvLockedDoor.states.locked)
 
         # Select num_keys agents to force
         self.key_agents = self.np_random.choice(len(self.env.agents), size=self.num_keys, replace=False)
@@ -56,6 +55,9 @@ class ColorBlindGame(BasePuzzleGame):
         # Place all the keys and keyholes into the world
         for keys in self.keys:
             loc = self._gen_loc()
+            # Make sure we don't block the exit!
+            # while np.linalg.norm(np.array(loc) - np.array(exit)) <= 1.0:
+            #     loc = self._gen_loc()
             self._set(*loc, keys)
 
         # Seperate in case we want to prevent overlap on keyholes
@@ -88,17 +90,18 @@ class ColorBlindGame(BasePuzzleGame):
                 i = self.env.agents.index(keyhole.unlocking_agent)
                 rew[i] += 1
                 keyhole.unlocking_agent = None
-            if keyhole.last_toggling_agent is not None \
-                and keyhole.reward > 0:
-                i = self.env.agents.index(keyhole.last_toggling_agent)
-                rew[i] += keyhole.reward
-                keyhole.last_toggling_agent = None
-                keyhole.reward = 0
+            # don't give reward for discovery
+            # if keyhole.last_toggling_agent is not None \
+            #     and keyhole.reward > 0:
+            #     i = self.env.agents.index(keyhole.last_toggling_agent)
+            #     rew[i] += keyhole.reward
+            #     keyhole.last_toggling_agent = None
+            #     keyhole.reward = 0
             if keyhole.state == KeyHole.states.unlocked:
                 num_unlocked += 1
 
         # If everything is unlocked, unlock the door
-        if num_unlocked == self.num_keys and self.exit_door.state == EnvLockedDoor.states.closed:
+        if num_unlocked == self.num_keys and self.exit_door.state == EnvLockedDoor.states.locked:
             rew += 1
             self.exit_door.unlock()
         
