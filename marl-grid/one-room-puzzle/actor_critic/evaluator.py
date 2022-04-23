@@ -129,7 +129,7 @@ class Evaluator(mp.Process):
                 ent_path = osp.join(self.video_save_dir,
                                     f'latest_ent_{eval_id}.png')
                 plot_ents(np.asarray([[uups.detach().cpu() for uups in ups] for ups in ents]), reward['agent_0'], max_time,
-                          ent_path, max_ent=[np.log(6), np.log(2)])#,
+                          ent_path, max_ent=[np.log(8), np.log(2)])#,
                         #   t_red_door=t_red_door)
 
                 # save video
