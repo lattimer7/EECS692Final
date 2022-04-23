@@ -74,7 +74,7 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
         
         # Get the generator objects and update mission
         # TODO: will this update the mission?
-        self.games = [self.generators[i].generate(self, exit_walls[i]) for i in gen_id]
+        self.games = [self.generators[v].generate(self, exit_walls[i]) for i,v in enumerate(gen_id)]
         self.mission = "TwoRoom: " + \
                         self.games[0].mission + "; " + \
                         self.games[1].mission
