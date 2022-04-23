@@ -45,11 +45,11 @@ class ColorOrderedLeversGame(BasePuzzleGame):
 
 
         # Generate position and try to place the levers
-        def gen_loc():
-            return (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
         for lever in self.levers:
-            loc = gen_loc()
-            while not self._is_free(*loc): loc = gen_loc()
+            loc = self._gen_loc()
+            # Make sure we don't block the exit!
+            while np.linalg.norm(np.array(loc) - np.array(exit)) <= 1.0:
+                loc = self._gen_loc()
             self._set(*loc, lever)
 
         # store the objects

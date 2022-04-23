@@ -79,7 +79,7 @@ class WorldObj(metaclass=RegisteredObjectType):
     def can_overlap(self):
         return False
 
-    def can_pickup(self):
+    def can_pickup(self, agent):
         return False
 
     def can_contain(self):
@@ -409,7 +409,10 @@ class ColorCyclerBox(WorldObj):
         self.color = color
         idx = next(i for i,c in enumerate(self.colors_states) if c == color)
         self.state = idx
-        self.interactable_agents = interactable_agents
+        if interactable_agents is not None:
+            self.interactable_agents = interactable_agents
+        else: 
+            self.interactable_agents = []
         self.last_toggling_agent = None
         self.reward = reward
         self.disabled = False
@@ -428,10 +431,11 @@ class ColorCyclerBox(WorldObj):
 
     def toggle(self, agent, pos):
         # See if this is an agent we can actually interact with
-        if next((a for a in self.interactable_agents if a == agent), None) is not None:
+        if agent in self.interactable_agents:
             self.last_toggling_agent = agent
             self.state = self._get_next_color()
             self.color = self._get_color()[0]
+            return True
         else:
             return False
         
@@ -534,16 +538,30 @@ class Key(WorldObj):
     unique_id = 0
     id_wraparound = 100
 
-    def __init__(self, key_obj=None, reward=0.5, *args, **kwargs):
-        self.unique_id = KeyHole.unique_id = (KeyHole.unique_id + 1) % KeyHole.id_wraparound
+    def __init__(self, interactable_agents = [], *args, **kwargs):
+        self.unique_id = Key.unique_id = (Key.unique_id + 1) % Key.id_wraparound
         super().__init__(*args, **kwargs)
+        if interactable_agents is not None:
+            self.interactable_agents = interactable_agents
+        else: 
+            self.interactable_agents = []
         
     @property
     def type(self):
-        return self.__class__.__name__ + self.unique_id
+        return self.__class__.__name__ + str(self.unique_id)
 
-    def can_pickup(self):
+    def can_pickup(self, agent):
+        if len(self.interactable_agents) > 0:
+            return agent in self.interactable_agents
+        else:
+            return True
+        
+    def can_overlap(self):
         return True
+
+    # Clears the interactable agents so that any agent can interact
+    def reveal(self):
+        self.interactable_agents = []
 
     def str_render(self, dir=0):
         return "KK"
@@ -626,22 +644,30 @@ class KeyHole(WorldObj):
         unlocked = 1
         locked = 2
     
-    def __init__(self, key_obj=None, reward=0.5, *args, **kwargs):
+    def __init__(self, key_obj=None, reward=0.5, interactable_agents = [], overlap = True, *args, **kwargs):
         self.unique_id = KeyHole.unique_id = (KeyHole.unique_id + 1) % KeyHole.id_wraparound
         super().__init__(*args, **kwargs)
         self.reward = reward
         self.key_obj = key_obj
         self.unlocking_agent = None
         self.last_toggling_agent = None
+        if interactable_agents is not None:
+            self.interactable_agents = interactable_agents
+        else: 
+            self.interactable_agents = []
+        self.overlap = overlap
+        self.state = KeyHole.states.locked
     
     @property
     def type(self):
-        return self.__class__.__name__ + self.unique_id
+        return self.__class__.__name__ + str(self.unique_id)
 
     def can_overlap(self):
-        return True
+        return self.overlap
     
     def toggle(self, agent, pos):
+        if not (agent in self.interactable_agents):
+            return False
         if self.state == self.states.locked:  # is locked
             # If the agent is carrying a key of matching color
             if (agent.carrying is not None

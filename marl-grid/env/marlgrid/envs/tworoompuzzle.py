@@ -142,6 +142,9 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
         return {**obs, **room1_obs, **room2_obs}
 
     def reset(self):
+        # reset all agent hides
+        for agent in self.agents:
+            agent.hide_item_types = []
         obs_dict = MultiGridEnv.reset(self)
         obs_dict['global'] = self.gen_global_obs()
         return obs_dict

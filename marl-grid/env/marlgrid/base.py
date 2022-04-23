@@ -759,13 +759,23 @@ class MultiGridEnv(gym.Env):
 
                 # Pick up an object
                 elif action == agent.actions.pickup:
-                    if fwd_cell and fwd_cell.can_pickup():
+                    if fwd_cell and fwd_cell.can_pickup(agent):
                         if not (len(getattr(agent, 'cant_pick_up', [])) > 0 and fwd_cell.color in agent.cant_pick_up):
                         # That is, if it's a color the agent can carry
                             if agent.carrying is None:
                                 agent.carrying = fwd_cell
+                                # Account for picking up a cell with agents
+                                if len(fwd_cell.agents) > 0:
+                                    temp = fwd_cell.agents.pop()
+                                    temp.agents = fwd_cell.agents
+                                    fwd_cell.agents = []
+                                    self.grid.set(*fwd_pos, temp)
+                                else:
+                                    self.grid.set(*fwd_pos, None)
+                                    fwd_cell.agents = []
                                 agent.carrying.cur_pos = np.array([-1, -1])
-                                self.grid.set(*fwd_pos, None)
+                            # Disable this.
+                            # agent.pos = fwd_pos
                     else:
                         pass
 

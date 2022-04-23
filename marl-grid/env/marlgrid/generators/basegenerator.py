@@ -74,6 +74,13 @@ class BasePuzzleGame:
     def _is_free(self, x: int, y: int):
         return not ((x,y) in self.objs)
 
+    def _gen_loc(self):
+        def gen_loc():
+            return (self.np_random.randint(1, self.width - 1), self.np_random.randint(1, self.height - 1))
+        loc = gen_loc()
+        while not self._is_free(*loc): loc = gen_loc()
+        return loc
+
     def _sample_exit_walls(self):
         # get the size of the space to sample
         if len(self.exit_walls) == 1 and self.exit_walls[0] == WALL_SIDE.ALL:

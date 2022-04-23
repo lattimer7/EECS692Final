@@ -86,7 +86,7 @@ class GridAgentInterface(GridAgent):
         if self.restrict_actions:
             env_act_dim = 5
         else:
-            env_act_dim = 6
+            env_act_dim = 8
 
         if comm_dim > 0 and comm_len > 0:
             self.observe_comm = True
