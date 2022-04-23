@@ -47,8 +47,7 @@ def create_grid_world_env(env_cfg):
                            TwoPressurePlateGameGenerator(10, 10),
                            CycleBoxColorGameGenerator(10, 10),
                            SinglePressurePlateGameGenerator(10, 10),
-                           ColorOrderedLeversGameGenerator(10, 10),
-                           ColorBlindGameGenerator(10, 10)]
+                           ColorOrderedLeversGameGenerator(10, 10)]
         },
         env_type=env_cfg.env_type)
 

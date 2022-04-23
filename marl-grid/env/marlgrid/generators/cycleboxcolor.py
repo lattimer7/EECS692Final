@@ -41,6 +41,7 @@ class CycleBoxColorGame(BasePuzzleGame):
         colorboxtype = ColorCyclerBox().type
         codedtriangletype = StaticCodedTriangle().type
         already_set = False
+        choice_agent = None
         for agent in self.env.agents:
             if colorboxtype in agent.hide_item_types:
                 already_set = True
