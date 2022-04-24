@@ -431,7 +431,7 @@ class ColorCyclerBox(WorldObj):
 
     def toggle(self, agent, pos):
         # See if this is an agent we can actually interact with
-        if agent in self.interactable_agents:
+        if not self.disabled and agent in self.interactable_agents:
             self.last_toggling_agent = agent
             self.state = self._get_next_color()
             self.color = self._get_color()[0]
