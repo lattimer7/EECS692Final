@@ -21,9 +21,9 @@ def normalize_dict_obs(obs_dict):
             continue
 
         if isinstance(v, dict):
-            obs_dict[k]['pov'] = (2. * ((v['pov'] / 255.) - 0.5))
+            obs_dict[k]['pov'] = (v['pov'] / 255.)
         else:
-            obs_dict[k] = (2. * ((v / 255.) - 0.5))
+            obs_dict[k] = (v / 255.)
     return obs_dict
 
 

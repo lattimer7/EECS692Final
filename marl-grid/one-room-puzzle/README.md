@@ -26,6 +26,9 @@ python train_ae.py --set num_workers 8 env_cfg.comm_len 10 ae_type 'fc' --gpu 0
 
 # ae-comm
 python train_ae.py --set num_workers 8 env_cfg.comm_len 10 --gpu 0
+
+# ours
+python train_ours.py --set num_workers 8 env_cfg.comm_len 32 env_cfg.observe_self_env_act True --gpu 0
 ```
 
 Videos, tensorboard logs, and checkpoints generated during training are saved in `./runs` by default.
