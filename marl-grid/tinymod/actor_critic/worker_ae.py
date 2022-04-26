@@ -183,7 +183,7 @@ class Worker(mp.Process):
                         els.append(ops.to_numpy(el))
 
                         reward_log += reward[agent]
-                        loss += (tl) # + lstm_loss + comm_ae_loss * self.ae_loss_k
+                        loss += (tl) + lstm_loss + comm_ae_loss * self.ae_loss_k
 
                     all_pls[aid].append(np.mean(pls))
                     all_vls[aid].append(np.mean(vls))

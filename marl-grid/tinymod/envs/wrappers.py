@@ -10,6 +10,8 @@ ENV_ACT_ID_TO_STR = {
     3: 'up',
     4: 'stay',
     5: 'toggle',
+    6: 'pickup',
+    7: 'drop',
 }
 
 
