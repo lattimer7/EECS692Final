@@ -221,7 +221,6 @@ class Worker(mp.Process):
                 np.around(np.mean(self.reward_log), decimals=2),
                 np.around(np.mean(lstm_losses), decimals=5),
             )
-
             self.master.apply_gradients(self.net)
             self.master.increment(progress_str)
 

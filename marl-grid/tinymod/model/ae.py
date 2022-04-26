@@ -164,6 +164,7 @@ class AENetwork(A3CTemplate):
             act_logp_dict[agent_name] = act_logp
             ent_list.append(ent)
             #TODO: REMOVE   
+            
             comm_act = (comm_out[int(agent_name[-1])]).cpu().numpy()
             all_act_dict[agent_name] = [act, comm_act]
         return act_dict, act_logp_dict, ent_list, all_act_dict

@@ -113,16 +113,16 @@ class ConvVAE(nn.Module):
     #     print('loss')
     return d, z, loss
 
-def mdn_loss_fn(y, pi, mu, sigma):
-    m = torch.distributions.Normal(loc=mu, scale=sigma)
-    loss = torch.exp(m.log_prob(y))
-    loss = torch.sum(loss * pi, dim=2)
-    loss = -torch.log(loss)
-    return loss.mean()
+def tf_lognormal(y, mean, logstd):
+      return -0.5 * ((y - mean) / torch.exp(logstd)) ** 2 - logstd - (np.log(np.sqrt(2.0 * np.pi)))
 
-def criterion(y, pi, mu, sigma):
-    y = y.unsqueeze(2)
-    return mdn_loss_fn(y, pi, mu, sigma)
+def mdn_loss_fn(y, logmix, mean, logstd):
+    v = logmix + tf_lognormal(y, mean, logstd)
+    v = torch.logsumexp(v, 1, keepdims=True)
+    return -v.mean()
+
+def criterion(y, logmix, mean, logstd):
+    return mdn_loss_fn(y, logmix, mean, logstd)
 
 
 class MDNRNN(nn.Module):
@@ -136,29 +136,53 @@ class MDNRNN(nn.Module):
         self.n_layers = n_layers
         
         self.lstm = nn.LSTM(in_z_size, n_hidden, n_layers, batch_first=True)
-        self.fc1 = nn.Linear(n_hidden, n_gaussians*out_z_size)
-        self.fc2 = nn.Linear(n_hidden, n_gaussians*out_z_size)
-        self.fc3 = nn.Linear(n_hidden, n_gaussians*out_z_size)
+        self.fc1 = nn.Linear(n_hidden, n_gaussians*out_z_size*3)
+
         
-    def get_mixture_coef(self, y):
-        rollout_length = y.size(1)
-        pi, mu, sigma = self.fc1(y), self.fc2(y), self.fc3(y)
+    # def get_mixture_coef(self, y):
+    #     rollout_length = y.size(1)
+    #     pi, mu, sigma = self.fc1(y), self.fc2(y), self.fc3(y)
         
-        pi = pi.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
-        mu = mu.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
-        sigma = sigma.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
+    #     pi = pi.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
+    #     mu = mu.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
+    #     sigma = sigma.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
         
-        pi = F.softmax(pi, 2)
-        sigma = torch.exp(sigma)
-        return pi, mu, sigma
+    #     pi = F.softmax(pi, 2)
+    #     sigma = torch.exp(sigma)
+    #     return pi, mu, sigma
+        
+    # def get_mixture_coef(self, y):
+    #     rollout_length = y.size(1)
+    #     logmix, mu, sigma = self.fc1(y), self.fc2(y), self.fc3(y)
+        
+    #     logmix = logmix.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
+    #     mu = mu.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
+    #     sigma = sigma.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
+        
+    #     logmix = logmix - torch.logsumexp(logmix, 1, keepdim=True)
+
+    #     return logmix, mu, sigma
+    def get_mixture_coef(self, output):
+        logmix, mean, logstd = torch.split(output, self.n_gaussians, dim=1)
+        logmix = logmix - torch.logsumexp(logmix, 1, keepdims=True)
+        return logmix, mean, logstd
+
         
         
     def forward(self, x, h, targets):
         # Forward propagate LSTM
         y, (h, c) = self.lstm(x, h)
-        pi, mu, sigma = self.get_mixture_coef(y)
-        loss = criterion(targets, pi, mu, sigma)
-        return (pi, mu, sigma), (h, c), loss
+        y = y.view(-1, self.n_hidden)
+        output = self.fc1(y)
+
+        output = output.view(-1, self.n_gaussians*3)
+
+        logmix, mean, logstd = self.get_mixture_coef(output)
+
+        flat_target = targets.view(-1, 1)
+
+        loss = criterion(flat_target, logmix, mean, logstd)
+        return (logmix, mean, logstd), (h, c), loss
     
     def init_hidden(self, bsz):
         return (torch.zeros(self.n_layers, bsz, self.n_hidden).cuda(),

@@ -62,6 +62,12 @@ class Master(object):
         # backward prop and clip gradients
         self.opt.zero_grad()
 
+        torch.nn.utils.clip_grad_value_([param for name, param in net.named_parameters()  if param.requires_grad and param.grad is not None and "head" in name], 1)
+        torch.nn.utils.clip_grad_value_([param for name, param in net.named_parameters()  if param.requires_grad and param.grad is not None and "conv_vae" in name], 20000)
+
+        # print(f'Conv: {max([param.grad.max() for name, param in net.named_parameters()  if param.requires_grad and param.grad is not None and "conv_vae" in name])}')
+        # print(f'LSTM: {max([param.grad.max() for name, param in net.named_parameters()  if param.requires_grad and param.grad is not None and "head" in name])}')
+
         torch.nn.utils.clip_grad_norm_(net.parameters(), 40.0)
 
         for p, mp in zip(net.parameters(), self.net.parameters()):
