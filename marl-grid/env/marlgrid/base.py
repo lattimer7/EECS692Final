@@ -509,16 +509,23 @@ class MultiGridEnv(gym.Env):
         # Allows masking away objects that the agent isn't supposed to see.
         # But breaks consistency between the states of the grid objects in the
         # parial views and the grid objects overall.
-        if len(getattr(agent, 'hide_item_types', [])) > 0:
-            for i in range(grid.width):
-                for j in range(grid.height):
-                    item = grid.get(i, j)
-                    if (item is not None) and (item is not agent) and (
-                            item.type in agent.hide_item_types):
-                        if len(item.agents) > 0:
-                            grid.set(i, j, item.agents[0])
-                        else:
-                            grid.set(i, j, None)
+        
+        # Converted to a function call so it's a little neater
+        # & ensures respective masking
+        def mask_by_attr(grid, agent, attribute_name, mask):
+            if len(mask) > 0:
+                for i in range(grid.width):
+                    for j in range(grid.height):
+                        item = grid.get(i, j)
+                        if (item is not None) and (item is not agent) and (
+                                getattr(item, attribute_name,'') in mask):
+                            if len(item.agents) > 0:
+                                grid.set(i, j, item.agents[0])
+                            else:
+                                grid.set(i, j, None)
+        
+        mask_by_attr(grid, agent, 'type', getattr(agent, 'hide_item_types', []))
+        mask_by_attr(grid, agent, 'color', getattr(agent, 'hide_item_colors', []))
 
         return grid, vis_mask
 
@@ -738,17 +745,37 @@ class MultiGridEnv(gym.Env):
                                     rwd, agent_no)
                                 env_rewards += env_rew
                                 step_rewards += step_rew
+                            
+                            # call set_active and unset_active on objects
+                            # added for pressure plate activations
+                            if hasattr(fwd_cell, 'set_active'):
+                                fwd_cell.set_active()
+                            if hasattr(cur_cell, 'unset_active'):
+                                cur_cell.unset_active()
 
                         if isinstance(fwd_cell, Goal):
                             agent.done = True
+                        
 
                 # Pick up an object
                 elif action == agent.actions.pickup:
-                    if fwd_cell and fwd_cell.can_pickup():
-                        if agent.carrying is None:
-                            agent.carrying = fwd_cell
-                            agent.carrying.cur_pos = np.array([-1, -1])
-                            self.grid.set(*fwd_pos, None)
+                    if fwd_cell and fwd_cell.can_pickup(agent):
+                        if not (len(getattr(agent, 'cant_pick_up', [])) > 0 and fwd_cell.color in agent.cant_pick_up):
+                        # That is, if it's a color the agent can carry
+                            if agent.carrying is None:
+                                agent.carrying = fwd_cell
+                                # Account for picking up a cell with agents
+                                if len(fwd_cell.agents) > 0:
+                                    temp = fwd_cell.agents.pop()
+                                    temp.agents = fwd_cell.agents
+                                    fwd_cell.agents = []
+                                    self.grid.set(*fwd_pos, temp)
+                                else:
+                                    self.grid.set(*fwd_pos, None)
+                                    fwd_cell.agents = []
+                                agent.carrying.cur_pos = np.array([-1, -1])
+                            # Disable this.
+                            # agent.pos = fwd_pos
                     else:
                         pass
 
@@ -962,9 +989,15 @@ class MultiGridEnv(gym.Env):
                 for k, view in enumerate(col_views):
                     offset = f_offset(view) + agent_col_padding_px
                     offset[0] += k * target_partial_height
+                    temp = col[
+                    offset[0]:offset[0] + view.shape[0],
+                    offset[1]:offset[1] + view.shape[1], :].shape
                     col[
                     offset[0]:offset[0] + view.shape[0],
-                    offset[1]:offset[1] + view.shape[1], :] = view
+                    offset[1]:offset[1] + view.shape[1], :] = view[:temp[0], :temp[1], :temp[2]]
+                    # col[
+                    # offset[0]:offset[0] + view.shape[0],
+                    # offset[1]:offset[1] + view.shape[1], :] = view
                 cols.append(col)
 
             img = np.concatenate((img, *cols), axis=1)

@@ -6,6 +6,11 @@ from gym.envs.registration import register as gym_register
 from .pressure import PressurePlateMultiGrid
 from .findgoal import FindGoalMultiGrid
 from .redbluedoors import RedBlueDoorsMultiGrid
+from .oneroompuzzle import OneRoomPuzzleMultiGrid
+from .tworoompuzzle import TwoRoomPuzzleMultiGrid
+from .colorvis import ColorBlindMultiGrid
+from ..agents import GridAgentInterface, SelectiveGridAgentInterface
+
 from ..agents import GridAgentInterface
 from ..base import MultiGridEnv
 
@@ -32,6 +37,7 @@ def make_agents(
         see_through_walls=True,
         neutral_shape=True,
         can_overlap=True,
+        selective_agents=False
 ):
     colors = ['red', 'blue', 'purple', 'orange', 'olive', 'pink']
     assert n_agents <= len(colors)
@@ -46,28 +52,52 @@ def make_agents(
     adv_indices = random.choice([i for i in range(n_agents)],
                                 n_adversaries,
                                 replace=False)
-
-    agents = [GridAgentInterface(
-        color=c if agent_color is None else agent_color,
-        neutral_shape=neutral_shape,
-        can_overlap=can_overlap,
-        view_size=view_size_lst[i],
-        view_tile_size=view_tile_size,
-        view_offset=view_offset,
-        observation_style=observation_style,
-        observe_position=observe_position,
-        observe_self_position=observe_self_position,
-        observe_done=observe_done,
-        observe_self_env_act=observe_self_env_act,
-        observe_t=observe_t,
-        restrict_actions=restrict_actions,
-        see_through_walls=see_through_walls,
-        comm_dim=comm_dim,
-        comm_len=comm_len,
-        discrete_comm=discrete_comm,
-        n_agents=n_agents,
-        is_adversary=1 if i in adv_indices else 0
-    ) for i, c in enumerate(colors[:n_agents])]
+    if selective_agents:
+        agents = [SelectiveGridAgentInterface(
+            color=c if agent_color is None else agent_color,
+            neutral_shape=neutral_shape,
+            can_overlap=can_overlap,
+            view_size=view_size_lst[i],
+            view_tile_size=view_tile_size,
+            view_offset=view_offset,
+            observation_style=observation_style,
+            observe_position=observe_position,
+            observe_self_position=observe_self_position,
+            observe_done=observe_done,
+            observe_self_env_act=observe_self_env_act,
+            observe_t=observe_t,
+            restrict_actions=restrict_actions,
+            see_through_walls=see_through_walls,
+            comm_dim=comm_dim,
+            comm_len=comm_len,
+            discrete_comm=discrete_comm,
+            n_agents=n_agents,
+            is_adversary=1 if i in adv_indices else 0,
+            hide_item_colors=c if agent_color is None else agent_color,
+            cant_pick_up = [x if (agent_color is not None and x is not agent_color) else "" for x in colors[:n_agents]]
+        ) for i, c in enumerate(colors[:n_agents])]
+    else:
+        agents = [GridAgentInterface(
+            color=c if agent_color is None else agent_color,
+            neutral_shape=neutral_shape,
+            can_overlap=can_overlap,
+            view_size=view_size_lst[i],
+            view_tile_size=view_tile_size,
+            view_offset=view_offset,
+            observation_style=observation_style,
+            observe_position=observe_position,
+            observe_self_position=observe_self_position,
+            observe_done=observe_done,
+            observe_self_env_act=observe_self_env_act,
+            observe_t=observe_t,
+            restrict_actions=restrict_actions,
+            see_through_walls=see_through_walls,
+            comm_dim=comm_dim,
+            comm_len=comm_len,
+            discrete_comm=discrete_comm,
+            n_agents=n_agents,
+            is_adversary=1 if i in adv_indices else 0
+        ) for i, c in enumerate(colors[:n_agents])]
     return agents
 
 
@@ -195,13 +225,28 @@ def register_env(
         use_gym_env=False,
         env_configs={},
         clutter_density=0.15,
-        env_type='c',
+        env_type='colorblind',
 ):
     if env_type == 'c':
         env_class = FindGoalMultiGrid
         restrict_actions = True
     elif env_type == 'd':
         env_class = RedBlueDoorsMultiGrid
+        assert n_agents == 2
+        assert n_adversaries == 0
+        restrict_actions = False
+    elif env_type == 'oneroompuzzle':
+        env_class = OneRoomPuzzleMultiGrid
+        assert n_agents == 2
+        assert n_adversaries == 0
+        restrict_actions = False
+    elif env_type == 'tworoompuzzle':
+        env_class = TwoRoomPuzzleMultiGrid
+        assert n_agents == 2
+        assert n_adversaries == 0
+        restrict_actions = False
+    elif env_type == 'colorblind':
+        env_class = ColorBlindMultiGrid
         assert n_agents == 2
         assert n_adversaries == 0
         restrict_actions = False
