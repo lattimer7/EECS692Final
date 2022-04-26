@@ -24,7 +24,7 @@ class ColorBlindGame(BasePuzzleGame):
         # Call the super class
         super().__init__(width, height, env, exit_walls, config)
         self.most_right = 0
-        self.rewarded_agents = {}
+        self.viewing_agents = {}
 
     def _gen_objs(self):
         # Generate the locations of the two pressure plates & the location
@@ -72,16 +72,35 @@ class ColorBlindGame(BasePuzzleGame):
         self._set(*exit, self.exit_door)
         self.exits = [self.exit_door]
 
+    def prestep(self):
+        # Get what agents can see the key *BEFORE* we update
+        for key in self.keys:
+            if key.reward > 0:
+                self.viewing_agents[key] = []
+                # Just add any agent that can see the key
+                for i,a in enumerate(self.env.agents):
+                    if key.type not in a.hide_item_types and a.in_view(*key.pos_init):
+                        self.viewing_agents[key].append(i)
+    
     def update(self):
         # Perform checks for unlocking doors and giving rewards
         rew = np.zeros((len(self.env.agents, )), dtype=float)
 
         # Check if any of the key agents are carrying a key
-        # For any carrying agent, give all agents a reward
+        # For any carrying agent, give all seeing agents a reward too
         for agent_id in self.key_agents:
-            if self.env.agents[agent_id].carrying is not None:
-                rew += self.env.agents[agent_id].carrying.reward
-                self.env.agents[agent_id].carrying.reward = 0
+            obj = self.env.agents[agent_id].carrying
+            if obj is not None and obj in self.keys:
+                if obj.reward > 0:
+                    # Simplify code
+                    key = obj
+                    v_a = self.viewing_agents[key]
+                    # Give carrying reward
+                    rew[agent_id] += key.reward
+                    # Give seeing reward
+                    rew[v_a] += key.reward / 2
+                    # Remove reward
+                    key.reward = 0
         
         # give a reward to the unlocking and discovering agent
         num_unlocked = 0

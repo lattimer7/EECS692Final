@@ -93,7 +93,7 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
                 # Otherwise place the object into the grid.
                 new_pos = (origin[0] + pos[0], origin[1] + pos[1])
                 grid.set(*new_pos, obj)
-                obj.pos = new_pos
+                obj.set_position(np.array(new_pos))
             for exit in exits:
                 exit.color = self.intermediate_color
             # The final set of exits is also the goal, so leave that there.
@@ -165,6 +165,9 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
         return res
 
     def step(self, action_dict):
+        for game in self.games:
+            game.prestep()
+        
         obs_dict, rew_dict, _, info_dict = MultiGridEnv.step(self, action_dict)
 
         # Assume that the update call needs to be made

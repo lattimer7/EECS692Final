@@ -58,7 +58,7 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
                         continue
             # Otherwise place the object into the grid.
             self.grid.set(pos[0], pos[1], obj)
-            obj.pos = pos
+            obj.set_position(np.array(pos))
 
         # We set our goal to the exit
         # self.goal_pos = exits[0]
@@ -110,6 +110,9 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
         return res
 
     def step(self, action_dict):
+        # Add a prestep for state requirements if needed
+        self.current_game.prestep()
+
         obs_dict, rew_dict, _, info_dict = MultiGridEnv.step(self, action_dict)
 
         # Assume that the update call needs to be made

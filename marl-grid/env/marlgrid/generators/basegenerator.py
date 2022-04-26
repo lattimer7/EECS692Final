@@ -48,6 +48,9 @@ class BasePuzzleGame:
 
     def update(self):
         return 0, {}
+    
+    def prestep(self):
+        pass
 
     def gen_room_obs(self):
         return {}

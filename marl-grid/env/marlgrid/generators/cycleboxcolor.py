@@ -26,6 +26,8 @@ class CycleBoxColorGame(BasePuzzleGame):
         super().__init__(width, height, env, exit_walls, config)
         self.most_right = 0
         self.rewarded_agents = {}
+        self.viewing_agents = {}
+        self.choice_agent_id = 0
 
     def _gen_objs(self):
         # Generate the locations of the two pressure plates & the location
@@ -46,16 +48,21 @@ class CycleBoxColorGame(BasePuzzleGame):
             if colorboxtype in agent.hide_item_types:
                 already_set = True
                 break
-            agent.hide_item_types = [colorboxtype]
+            agent.hide_item_types.append(colorboxtype)
         if not already_set:
-            choice_agent = self.np_random.choice(self.env.agents)
-            choice_agent.hide_item_types = [codedtriangletype]
+            self.choice_agent_id = self.np_random.randint(len(self.env.agents))
+            choice_agent = self.env.agents[self.choice_agent_id]
+            try:
+                choice_agent.hide_item_types.remove(colorboxtype)
+            except ValueError:
+                pass
+            choice_agent.hide_item_types.append(codedtriangletype)
         else:
-            for agent in self.env.agents:
+            for i,agent in enumerate(self.env.agents):
                 if codedtriangletype in agent.hide_item_types:
-                    choice_agent = agent
+                    self.choice_agent_id = i
+                    choice_agent = self.env.agents[self.choice_agent_id]
                     break
-
 
         # The center will always be the coded triangle
         # RIGHT DOWN LEFT UP
@@ -102,6 +109,17 @@ class CycleBoxColorGame(BasePuzzleGame):
         self._set(*exit, self.exit_door)
         self.exits = [self.exit_door]
 
+    def prestep(self):
+        # Get what agents can see the code *BEFORE* we update
+        for code,box in self.codepairs:
+            if box.reward > 0:
+                self.viewing_agents[code] = []
+                # The choice agent gets double rewarded anyway, so
+                # we can cheat and let it stay in here
+                for i,a in enumerate(self.env.agents):
+                    if a.in_view(*code.pos_init):
+                        self.viewing_agents[code].append(i)
+
     def update(self):
         # Check the states of the codepairs and give a reward if the right
         # color is selected the first time.
@@ -114,26 +132,20 @@ class CycleBoxColorGame(BasePuzzleGame):
         for code,box in self.codepairs:
             if code.color == box.color:
                 if box.reward > 0:
-                    self.rewarded_agents[box] = []
-                    # i = next(i for i,a in enumerate(self.env.agents) if a == box.last_toggling_agent)
-                    # rew[i] += box.reward
-                    # Also give overall reward
-                    for i,a in enumerate(self.env.agents):
-                        # Toggling agent gets double reward
-                        if a == box.last_toggling_agent:
-                            rew[i] += box.reward
-                            self.rewarded_agents[box].append(i)
-                        # all other agents in view of code will get the reward
-                        if a.in_view(*code.pos):
-                            rew[i] += box.reward
-                            self.rewarded_agents[box].append(i)
+                    # all agents in view of code will get the reward
+                    self.rewarded_agents[box] = self.viewing_agents[code]
+                    rew[self.viewing_agents[code]] += box.reward
+
+                    # Toggling agent gets double reward
+                    # (and is incorrectly included as a viewing agent)
+                    rew[self.choice_agent_id] += box.reward
                     box.reward = -box.reward/2
                 num_right += 1
             else:
                 if box.reward < 0:
                     # This means we've cycled off the color, so we penalize it
-                    for i in self.rewarded_agents[box]:
-                        rew[i] += box.reward
+                    rew[self.rewarded_agents[box]] += box.reward
+                    rew[self.choice_agent_id] += box.reward
                     self.rewarded_agents.pop(box)
                     box.reward = 0
 

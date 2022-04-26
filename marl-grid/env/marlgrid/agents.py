@@ -319,8 +319,14 @@ class GridAgentInterface(GridAgent):
         # Compute the absolute coordinates of the top-left view corner
         sz = self.view_size
         hs = self.view_size // 2
-        tx = ax + (dx * (sz - 1)) - (rx * hs)
-        ty = ay + (dy * (sz - 1)) - (ry * hs)
+        # Make room for BS with this
+        if self.see_through_walls:
+            vx = i - (ax - hs)
+            vy = j - (ay - hs)
+            return vx, vy
+        else:
+            tx = ax + (dx * (sz - 1)) - (rx * hs)
+            ty = ay + (dy * (sz - 1)) - (ry * hs)
 
         lx = i - tx
         ly = j - ty
