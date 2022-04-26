@@ -21,9 +21,9 @@ def normalize_dict_obs(obs_dict):
             continue
 
         if isinstance(v, dict):
-            obs_dict[k]['pov'] = (v['pov'] / 255.)
+            obs_dict[k]['pov'] = torch.maximum((v['pov'] / 255.), 1e-4)
         else:
-            obs_dict[k] = (v / 255.)
+            obs_dict[k] = torch.maximum((v / 255.), 1e-4)
     return obs_dict
 
 

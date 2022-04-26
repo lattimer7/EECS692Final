@@ -51,43 +51,24 @@ class ConvVAE(nn.Module):
     # self.sampling = Lambda(self.sample)
 
   def calculate_loss(self, mean, log_variance, predictions, targets):
-        mse = F.mse_loss(predictions, targets, reduction='mean')
-        log_sigma_opt = 0.5 * mse.log()
-        r_loss = 0.5 * torch.pow((targets - predictions) / log_sigma_opt.exp(), 2) + log_sigma_opt
-        r_loss = r_loss.sum()
-        kl_loss = self._compute_kl_loss(mean, log_variance)
-        return r_loss, kl_loss, log_sigma_opt.exp()
+      # compute the average MSE error, then scale it up i.e. simply sum on all axes
+      r_loss = torch.sum((predictions - targets).pow(2), dim=(1, 2, 3))
+      r_loss = torch.mean(r_loss)
+      # compute the KL loss
+      kl_loss = -0.5 * torch.sum(1 + log_variance - mean.pow(2) - log_variance.exp(), dim=-1)
+      kl_loss = torch.maximum(kl_loss, torch.tensor(self.kl_tolerance * self.z_size))
+      # return the average loss over all images in batch
+      total_loss = r_loss + torch.mean(kl_loss)
+      return total_loss
 
-  def _compute_kl_loss(self, mean, log_variance): 
-      return -0.5 * torch.sum(1 + log_variance - mean.pow(2) - log_variance.exp())
-
-  # def sample(self, args):
-  #       mu, log_variance = args
-
-  #       std = torch.exp(log_variance / 2.0)
-  #       # define a distribution q with the parameters mu and std
-  #       q = torch.distributions.Normal(mu, std)
-  #       # sample z from q
-  #       z = q.rsample()
-
-  #       return z
 
   def forward(self, x):
     h = self.encoder(x)
-    # if torch.isinf(h).any():
-    #     print('encoder')
     h = torch.reshape(h, [-1, 2*2*256])
-    # if torch.isinf(h).any():
-    #     print('reshape')
     mu = self.mu(h)
     logvar = self.logvar(h)
     sigma = torch.exp(logvar / 2.0)
-    # if torch.isinf(sigma).any():
-    #     print('sigma')
     epsilon = self.N.sample(mu.shape)
-    # z = self.sampling([mu, logvar])
-    # if torch.isinf(epsilon).any():
-    #     print('epsilon')
     z = mu + sigma * epsilon
 
     d = self.decoderdense(z)
