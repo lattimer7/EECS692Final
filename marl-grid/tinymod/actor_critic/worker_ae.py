@@ -52,7 +52,7 @@ class Worker(mp.Process):
         self.gpu_id = gpu_id
         self.reward_log = deque(maxlen=5)  # track last 5 finished rewards
         self.pfmt = 'policy loss: {} value loss: {} ' + \
-                    'entropy loss: {} ae loss: {} reward: {}'
+                    'entropy loss: {} ae loss: {} reward: {} lstm_loss:{}'
         self.agents = [f'agent_{i}' for i in range(self.env.num_agents)]
         self.num_acts = 1
         self.ae_loss_k = ae_loss_k
@@ -183,7 +183,7 @@ class Worker(mp.Process):
                         els.append(ops.to_numpy(el))
 
                         reward_log += reward[agent]
-                        loss += (tl + lstm_loss + comm_ae_loss * self.ae_loss_k)
+                        loss += (tl) # + lstm_loss + comm_ae_loss * self.ae_loss_k
 
                     all_pls[aid].append(np.mean(pls))
                     all_vls[aid].append(np.mean(vls))
@@ -218,7 +218,8 @@ class Worker(mp.Process):
                 np.around(np.mean(all_vls, axis=-1), decimals=5),
                 np.around(np.mean(all_els, axis=-1), decimals=5),
                 np.around(np.mean(comm_ae_losses), decimals=5),
-                np.around(np.mean(self.reward_log), decimals=2)
+                np.around(np.mean(self.reward_log), decimals=2),
+                np.around(np.mean(lstm_losses), decimals=5),
             )
 
             self.master.apply_gradients(self.net)

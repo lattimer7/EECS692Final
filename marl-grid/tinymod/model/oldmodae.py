@@ -134,7 +134,7 @@ class InputProcessor(nn.Module):
                 feats = feats[0]
             else:
                 raise ValueError('?!?!?!', feats)
-
+            feats = feats.float()
             feats = self.state_feat_fc(feats)
             feats = self.state_layer_norm(feats)
             cat_feat[i] = torch.cat([cat_feat[i], feats], dim=-1)
@@ -151,11 +151,8 @@ class EncoderDecoder(nn.Module):
     def __init__(self, obs_space, comm_len, discrete_comm, num_agents,
                  ae_type='', img_feat_dim=64):
         super(EncoderDecoder, self).__init__()
-
-        self.preprocessor = InputProcessor(obs_space, 0, num_agents,
-                                           last_fc_dim=img_feat_dim)
+        self.preprocessor = InputProcessor(obs_space, 0, num_agents, last_fc_dim=img_feat_dim)
         in_size = self.preprocessor.feat_dim
-
         if ae_type == 'rfc':
             # random projection using fc
             self.encoder = nn.Sequential(
@@ -242,6 +239,7 @@ class EncoderDecoder(nn.Module):
         else:
             raise NotImplementedError
 
+
         self.discrete_comm = discrete_comm
         self.ae_type = ae_type
 
@@ -258,7 +256,6 @@ class EncoderDecoder(nn.Module):
 
     def forward(self, feat):
         encoded = self.encoder(feat)
-
         if self.ae_type in {'rfc', 'rmlp'}:
             # do not detach since there's no reconstruction loss
             if self.discrete_comm:
@@ -308,7 +305,6 @@ class AENetwork(A3CTemplate):
                                       img_feat_dim=img_feat_dim)
 
         feat_dim = self.comm_ae.preprocessor.feat_dim
-
         if ae_type == '':
             self.input_processor = InputProcessor(
                 obs_space,
@@ -323,17 +319,17 @@ class AENetwork(A3CTemplate):
                 last_fc_dim=img_feat_dim)
 
         # individual memories
-        self.feat_dim = self.input_processor.feat_dim + comm_len
+        self.feat_dim =  comm_len + self.action_size
         self.head = nn.ModuleList(
-            [LSTMhead(self.feat_dim, hidden_size, num_layers=1
+            [LSTMhead(self.feat_dim, hidden_size, comm_len, num_layers=1
                       ) for _ in range(num_agents)])
         self.is_recurrent = True
 
         # separate AC for env action and comm action
         self.env_critic_linear = nn.ModuleList([nn.Linear(
-            hidden_size, 1) for _ in range(num_agents)])
+            hidden_size+comm_len+hidden_size, 1) for _ in range(num_agents)])
         self.env_actor_linear = nn.ModuleList([nn.Linear(
-            hidden_size, self.env_action_size) for _ in range(num_agents)])
+            hidden_size+comm_len+hidden_size, self.env_action_size) for _ in range(num_agents)])
 
         self.reset_parameters()
         return
@@ -369,7 +365,7 @@ class AENetwork(A3CTemplate):
             all_act_dict[agent_name] = [act, comm_act]
         return act_dict, act_logp_dict, ent_list, all_act_dict
 
-    def forward(self, inputs, hidden_state=None, env_mask_idx=None):
+    def forward(self, inputs, hidden_state=None, prev_z=None, env_mask_idx=None):
         assert type(inputs) is dict
         assert len(inputs.keys()) == self.num_agents + 1  # agents + global
 
@@ -378,38 +374,46 @@ class AENetwork(A3CTemplate):
         # (1) pre-process inputs
         comm_feat = []
         for i in range(self.num_agents):
-            cf = self.comm_ae.decode(inputs[f'agent_{i}']['comm'][:-1])
-            if not self.ae_pg:
-                cf = cf.detach()
-            comm_feat.append(cf)
-
-        cat_feat = self.input_processor(inputs, comm_feat)
+            # TODO: How do I hijack the comm vector?
+            if inputs[f'agent_{i}']['comm'][:-1].shape != torch.Size([1, 256]):
+                comm_feat.append(hidden_state[i][0].squeeze())
+            else:
+                comm_feat.append(inputs[f'agent_{i}']['comm'][:-1].squeeze())
 
         # (2) generate AE comm output and reconstruction loss
         with torch.no_grad():
             x = self.input_processor(inputs)
         x = torch.cat(x, dim=0)
-        
-        comm_out, comm_ae_loss = self.comm_ae(x)
+        zt, ae_loss = self.comm_ae(x)
 
+        if prev_z is None:
+            prev_z = zt
+        prev_z.detach()
         # (3) predict policy and values separately
         env_actor_out, env_critic_out = {}, {}
-
         for i, agent_name in enumerate(inputs.keys()):
             if agent_name == 'global':
                 continue
-
-            cat_feat[i] = torch.cat([cat_feat[i], comm_out[i].unsqueeze(0)],
+            print(i)            
+            # TODO: Change to cat action, comm_out[i], and cat_feat[i]
+            env_act = F.one_hot(
+                inputs[f'agent_{i}']['self_env_act'].to(torch.int64),
+                num_classes=self.action_size)
+            env_act = torch.reshape(env_act, (1, self.action_size))
+            cat_feat = torch.cat([prev_z[i].unsqueeze(0),env_act],
                                     dim=-1)
 
-            x, hidden_state[i] = self.head[i](cat_feat[i], hidden_state[i])
-
-            env_actor_out[agent_name] = self.env_actor_linear[i](x)
-            env_critic_out[agent_name] = self.env_critic_linear[i](x)
+            x, hidden_state[i], lstm_loss = self.head[i](cat_feat, hidden_state[i], zt[i])
+            
+            handz = torch.cat([hidden_state[i][0].squeeze(), zt[i], comm_feat[i]]).unsqueeze(0)
+            env_actor_out[agent_name] = self.env_actor_linear[i](handz)
+            env_critic_out[agent_name] = self.env_critic_linear[i](handz)
 
             # mask logits of unavailable actions if provided
             if env_mask_idx and env_mask_idx[i]:
                 env_actor_out[agent_name][0, env_mask_idx[i]] = -1e10
 
+        hidden_comm = [p[0].squeeze().detach() for p in hidden_state]
+
         return env_actor_out, env_critic_out, hidden_state, \
-               comm_out.detach(), comm_ae_loss
+               hidden_comm, ae_loss, lstm_loss, zt.detach()

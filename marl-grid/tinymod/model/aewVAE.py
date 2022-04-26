@@ -12,7 +12,6 @@ import torch.nn.functional as F
 from model.a3c_template import A3CTemplate, take_action, take_comm_action
 from model.init import normalized_columns_initializer, weights_init
 from model.model_utils import LSTMhead, ImgModule
-
 class Encoder(nn.Module):
     def __init__(self, input_size, last_fc_dim=64):  
         super(Encoder, self).__init__()
@@ -20,7 +19,7 @@ class Encoder(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, 3, stride=2, padding=1)
         self.conv3 = nn.Conv2d(64, 128, 3, stride=2, padding=1)
         self.conv4 = nn.Conv2d(128, 256, 3, stride=2, padding=0)
-        self.linear1 = nn.Linear(3*3*256, 128)
+        self.linear1 = nn.Linear(1024, 128)
         self.linear2 = nn.Linear(128, last_fc_dim)
         self.linear3 = nn.Linear(128, last_fc_dim)
 
@@ -30,7 +29,6 @@ class Encoder(nn.Module):
         self.kl = 0
 
     def forward(self, x):
-        x = x.to(device)
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
@@ -51,11 +49,11 @@ class Decoder(nn.Module):
         self.decoder_lin = nn.Sequential(
             nn.Linear(last_fc_dim, 128),
             nn.ReLU(True),
-            nn.Linear(128, 3 * 3 * 256),
+            nn.Linear(128, 256*2*2),
             nn.ReLU(True)
         )
 
-        self.unflatten = nn.Unflatten(dim=1, unflattened_size=(32, 3, 3))
+        self.unflatten = nn.Unflatten(dim=1, unflattened_size=(256, 2, 2))
 
         self.decoder_conv = nn.Sequential(
             nn.ConvTranspose2d(256, 128, 3, stride=2, output_padding=0),
@@ -71,7 +69,6 @@ class Decoder(nn.Module):
         x = self.decoder_lin(x)
         x = self.unflatten(x)
         x = self.decoder_conv(x)
-        x = torch.sigmoid(x)
         return x
 
 class EncoderDecoder(nn.Module):
@@ -87,16 +84,12 @@ class EncoderDecoder(nn.Module):
         input: inputs[f'agent_{i}']['comm'] (num_agents, comm_len)
             (note that agent's own state is at the last index)
         """
-        if self.ae_type:
-            # ['fc', 'mlp', 'rfc', 'rmlp']
-            return x
-        else:
-            return self.decoder(x)  # (num_agents, in_size)
+        return self.decoder(x)  # (num_agents, in_size)
 
     def forward(self, x):
         z = self.encoder(x)
         decoded = self.decoder(z)
-        loss = F.mse_loss(decoded, x)
+        loss = F.mse_loss(decoded, x) + self.encoder.kl
         return z.detach(), loss
 
 
@@ -118,35 +111,19 @@ class AENetwork(A3CTemplate):
 
         self.comm_ae = EncoderDecoder(obs_space, comm_len, discrete_comm,
                                       num_agents, ae_type=ae_type,
-                                      img_feat_dim=img_feat_dim)
-
-        feat_dim = self.comm_ae.preprocessor.feat_dim
-
-        if ae_type == '':
-            self.input_processor = InputProcessor(
-                obs_space,
-                feat_dim,
-                num_agents,
-                last_fc_dim=img_feat_dim)
-        else:
-            self.input_processor = InputProcessor(
-                obs_space,
-                comm_len,
-                num_agents,
-                last_fc_dim=img_feat_dim)
-
+                                      img_feat_dim=comm_len)
         # individual memories
-        self.feat_dim = self.input_processor.feat_dim + comm_len
+        self.feat_dim =  comm_len + self.action_size
         self.head = nn.ModuleList(
-            [LSTMhead(self.feat_dim, hidden_size, num_layers=1
+            [LSTMhead(self.feat_dim, hidden_size, comm_len, num_layers=1
                       ) for _ in range(num_agents)])
         self.is_recurrent = True
 
         # separate AC for env action and comm action
         self.env_critic_linear = nn.ModuleList([nn.Linear(
-            hidden_size, 1) for _ in range(num_agents)])
+            hidden_size+comm_len+hidden_size, 1) for _ in range(num_agents)])
         self.env_actor_linear = nn.ModuleList([nn.Linear(
-            hidden_size, self.env_action_size) for _ in range(num_agents)])
+            hidden_size+comm_len+hidden_size, self.env_action_size) for _ in range(num_agents)])
 
         self.reset_parameters()
         return
@@ -189,39 +166,56 @@ class AENetwork(A3CTemplate):
         # WARNING: the following code only works for Python 3.6 and beyond
 
         # (1) pre-process inputs
-        comm_feat = []
-        for i in range(self.num_agents):
-            cf = self.comm_ae.decode(inputs[f'agent_{i}']['comm'][:-1])
-            if not self.ae_pg:
-                cf = cf.detach()
-            comm_feat.append(cf)
+        #comm_feat = []
+        #for i in range(self.num_agents):
+            # TODO: How do I hijack the comm vector?
+            #cf = self.comm_ae.decode(inputs[f'agent_{i}']['comm'][:-1])
+            #if not self.ae_pg:
+            #    cf = cf.detach()
+            #comm_feat.append(cf)
 
-        cat_feat = self.input_processor(inputs, comm_feat)
-
+        #cat_feat = self.input_processor(inputs, comm_feat)
         # (2) generate AE comm output and reconstruction loss
-        with torch.no_grad():
-            x = self.input_processor(inputs)
-        x = torch.cat(x, dim=0)
-        comm_out, comm_ae_loss = self.comm_ae(inputs)
-
+        #with torch.no_grad():
+        #x = self.input_processor(inputs)
+        #x = torch.cat(x, dim=0)
+        pov = []
+        for i in range(self.num_agents):
+            pov.append(inputs[f'agent_{i}']['pov'])
+        xs = torch.cat(pov, dim=0)
+        
+        comm_out, comm_ae_loss = self.comm_ae(xs)
+        comm_out = comm_out.detach()
         # (3) predict policy and values separately
         env_actor_out, env_critic_out = {}, {}
-
         for i, agent_name in enumerate(inputs.keys()):
             if agent_name == 'global':
                 continue
-
-            cat_feat[i] = torch.cat([cat_feat[i], comm_out[i].unsqueeze(0)],
+            
+            env_act = F.one_hot(
+                inputs[f'agent_{i}']['self_env_act'].to(torch.int64),
+                num_classes=self.action_size)
+            env_act = torch.reshape(env_act, (1, self.action_size))
+            cat_feat = torch.cat([inputs[f'agent_{i}']['comm'][-1].unsqueeze(0),env_act],
                                     dim=-1)
-
-            x, hidden_state[i] = self.head[i](cat_feat[i], hidden_state[i])
-
-            env_actor_out[agent_name] = self.env_actor_linear[i](x)
-            env_critic_out[agent_name] = self.env_critic_linear[i](x)
+            
+            #insert zt-1 and at-1 with ht-1 to model zt and output ht with loss
+            x, hidden_state[i], lstm_loss = self.head[i](cat_feat, hidden_state[i], comm_out[i])
+        
+        otherhiddenstates = [p[0].clone().detach() for p in hidden_state]
+        
+        for i, agent_name in enumerate(inputs.keys()):
+            otheragent = 1 if i==0 else 0
+            if agent_name == 'global':
+                continue
+            # predict next action at with ht, zt, and commht-1
+            handz = torch.cat([otherhiddenstates[i].squeeze(), comm_out[i], otherhiddenstates[otheragent].squeeze()]).unsqueeze(0)
+            env_actor_out[agent_name] = self.env_actor_linear[i](handz)
+            env_critic_out[agent_name] = self.env_critic_linear[i](handz)
 
             # mask logits of unavailable actions if provided
             if env_mask_idx and env_mask_idx[i]:
                 env_actor_out[agent_name][0, env_mask_idx[i]] = -1e10
 
         return env_actor_out, env_critic_out, hidden_state, \
-               comm_out.detach(), comm_ae_loss
+               comm_out.detach(), comm_ae_loss, lstm_loss

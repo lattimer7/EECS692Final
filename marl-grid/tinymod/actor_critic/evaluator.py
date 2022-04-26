@@ -78,7 +78,6 @@ class Evaluator(mp.Process):
 
                 state = env_copy.reset()
                 state_var = ops.to_state_var(state)
-
                 if self.net.is_recurrent:
                     hidden_state = self.net.init_hidden()
 

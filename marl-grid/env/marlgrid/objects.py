@@ -322,7 +322,6 @@ class EnvLockedDoor(FreeDoor):
         self.reward = reward
         self.been_toggled = False
 
-
     def toggle(self, env, pos):
         self.been_toggled = True
         return False

@@ -485,6 +485,7 @@ class MultiGridEnv(gym.Env):
         obs = self.gen_obs()
 
         obs_dict = {f'agent_{i}': obs[i] for i in range(len(obs))}
+
         return obs_dict
 
     def gen_obs_grid(self, agent):
@@ -677,7 +678,6 @@ class MultiGridEnv(gym.Env):
 
             if self.comm_dim > 0 and self.comm_len > 0:
                 assert len(action) == 2
-                assert len(action[1]) == self.comm_len
                 agent.env_act = action[0]
                 agent.comm = action[1]
                 action = agent.env_act

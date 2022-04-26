@@ -2,286 +2,102 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
-
+import pickle
 import math
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from torchvision.utils import save_image
 from model.a3c_template import A3CTemplate, take_action, take_comm_action
 from model.init import normalized_columns_initializer, weights_init
-from model.model_utils import LSTMhead, ImgModule
+from model.model_utils import LSTMhead, ImgModule, MDNRNN
 
+class ConvVAE(nn.Module):
+  def __init__(self, z_size=32, learning_rate=0.0001, kl_tolerance=0.5, is_training=False, reuse=False, gpu_mode=False):
+    super().__init__()
+    self.z_size = z_size
+    self.learning_rate = learning_rate
+    self.is_training = is_training
+    self.kl_tolerance = kl_tolerance
 
-class STE(torch.autograd.Function):
-    """Straight-Through Estimator"""
-    @staticmethod
-    def forward(ctx, x):
-        return (x > 0.5).float()
+    self.encoder = nn.Sequential(
+        nn.Conv2d(3, 32, 4, stride=2, padding=2),
+        nn.ReLU(True),
+        nn.Conv2d(32, 64, 4, stride=2, padding=2),
+        nn.ReLU(True),
+        nn.Conv2d(64, 128, 4, stride=2, padding=2),
+        nn.ReLU(True),
+        nn.Conv2d(128, 256, 4, stride=2),
+        nn.ReLU(True)
+    )
+    self.mu = nn.Linear(2*2*256, self.z_size)
+    self.logvar = nn.Linear(2*2*256, self.z_size)
 
-    @staticmethod
-    def backward(ctx, grad_output):
-        # clamp gradient between -1 and 1
-        return F.hardtanh(grad_output)
+    self.decoderdense = nn.Linear(self.z_size, 256*4)
 
+    self.decoder = nn.Sequential(
+        nn.ConvTranspose2d(4*256, 128, 5, stride=2),
+        nn.ReLU(True),
+        nn.ConvTranspose2d(128, 64, 5, stride=2, padding=2),
+        nn.ReLU(True),
+        nn.ConvTranspose2d(64, 32, 6, stride=2, padding=2),
+        nn.ReLU(True),
+        nn.ConvTranspose2d(32, 3, 6, stride=2)
+    )
+    self.N = torch.distributions.Normal(0, 1)
+    self.N.loc = self.N.loc.cuda() # hack to get sampling on the GPU
+    self.N.scale = self.N.scale.cuda()
+    # self.sampling = Lambda(self.sample)
 
-class InputProcessor(nn.Module):
-    """
-    Pre-process the following individual observations:
-        - pov (ImgModule)
-        - self_env_act
-        - selfpos
-    """
-    def __init__(self, obs_space, comm_feat_len, num_agents, last_fc_dim=64):
-        super(InputProcessor, self).__init__()
+  def calculate_loss(self, mean, log_variance, predictions, targets):
+        mse = F.mse_loss(predictions, targets, reduction='mean')
+        log_sigma_opt = 0.5 * mse.log()
+        r_loss = 0.5 * torch.pow((targets - predictions) / log_sigma_opt.exp(), 2) + log_sigma_opt
+        r_loss = r_loss.sum()
+        kl_loss = self._compute_kl_loss(mean, log_variance)
+        return r_loss, kl_loss, log_sigma_opt.exp()
 
-        self.obs_keys = list(obs_space.spaces.keys())
-        self.num_agents = num_agents
+  def _compute_kl_loss(self, mean, log_variance): 
+      return -0.5 * torch.sum(1 + log_variance - mean.pow(2) - log_variance.exp())
 
-        # image processor
-        assert 'pov' in self.obs_keys
-        self.conv = ImgModule(obs_space['pov'].shape, last_fc_dim=last_fc_dim)
-        feat_dim = last_fc_dim
+  # def sample(self, args):
+  #       mu, log_variance = args
 
-        # state inputs processor
-        state_feat_dim = 0
+  #       std = torch.exp(log_variance / 2.0)
+  #       # define a distribution q with the parameters mu and std
+  #       q = torch.distributions.Normal(mu, std)
+  #       # sample z from q
+  #       z = q.rsample()
 
-        if 'self_env_act' in self.obs_keys:
-            # discrete value with one-hot encoding
-            self.env_act_dim = obs_space.spaces['self_env_act'].n
-            state_feat_dim += self.env_act_dim
+  #       return z
 
-        if 'selfpos' in self.obs_keys:
-            self.discrete_positions = None
-            if obs_space.spaces['selfpos'].__class__.__name__ == \
-                    'MultiDiscrete':
-                # process position with one-hot encoder
-                self.discrete_positions = obs_space.spaces['selfpos'].nvec
-                state_feat_dim += sum(self.discrete_positions)
-            else:
-                state_feat_dim += 2
+  def forward(self, x):
+    h = self.encoder(x)
+    # if torch.isinf(h).any():
+    #     print('encoder')
+    h = torch.reshape(h, [-1, 2*2*256])
+    # if torch.isinf(h).any():
+    #     print('reshape')
+    mu = self.mu(h)
+    logvar = self.logvar(h)
+    sigma = torch.exp(logvar / 2.0)
+    # if torch.isinf(sigma).any():
+    #     print('sigma')
+    epsilon = self.N.sample(mu.shape)
+    # z = self.sampling([mu, logvar])
+    # if torch.isinf(epsilon).any():
+    #     print('epsilon')
+    z = mu + sigma * epsilon
 
-        if state_feat_dim == 0:
-            self.state_feat_fc = None
-        else:
-            # use state_feat_fc to process concatenated state inputs
-            self.state_feat_fc = nn.Linear(state_feat_dim, 64)
-            feat_dim += 64
-
-        if self.state_feat_fc:
-            self.state_layer_norm = nn.LayerNorm(64)
-        self.img_layer_norm = nn.LayerNorm(last_fc_dim)
-
-        # all other agents' decoded features, if provided
-        self.comm_feat_dim = comm_feat_len * (num_agents - 1)
-        feat_dim += self.comm_feat_dim
-
-        self.feat_dim = feat_dim
-
-    def forward(self, inputs, comm=None):
-        # WARNING: the following code only works for Python 3.6 and beyond
-
-        # process images together if provided
-        if 'pov' in self.obs_keys:
-            pov = []
-            for i in range(self.num_agents):
-                pov.append(inputs[f'agent_{i}']['pov'])
-            x = torch.cat(pov, dim=0)
-            x = self.conv(x)  # (N, img_feat_dim)
-            xs = torch.chunk(x, self.num_agents)
-
-        # concatenate observation features
-        cat_feat = [self.img_layer_norm(xs[i]) for i in range(self.num_agents)]
-
-        if self.state_feat_fc is None:
-            if comm is not None:
-                for i in range(self.num_agents):
-                    # concat comm features for each agent
-                    c = torch.reshape(comm[i], (1, self.comm_feat_dim))
-                    cat_feat[i] = torch.cat([cat_feat[i], c], dim=-1)
-            return cat_feat
-
-        for i in range(self.num_agents):
-            # concatenate state features
-            feats = []
-
-            # concat last env act if provided
-            if 'self_env_act' in self.obs_keys:
-                env_act = F.one_hot(
-                    inputs[f'agent_{i}']['self_env_act'].to(torch.int64),
-                    num_classes=self.env_act_dim)
-                env_act = torch.reshape(env_act, (1, self.env_act_dim))
-                feats.append(env_act)
-
-            # concat agent's own position if provided
-            if 'selfpos' in self.obs_keys:
-                sp = inputs[f'agent_{i}']['selfpos'].to(torch.int64)  # (2,)
-                if self.discrete_positions is not None:
-                    spx = F.one_hot(sp[0],
-                                    num_classes=self.discrete_positions[0])
-                    spy = F.one_hot(sp[1],
-                                    num_classes=self.discrete_positions[1])
-                    sp = torch.cat([spx, spy], dim=-1).float()
-                    sp = torch.reshape(sp, (1, sum(self.discrete_positions)))
-                else:
-                    sp = torch.reshape(sp, (1, 2))
-                feats.append(sp)
-
-            if len(feats) > 1:
-                feats = torch.cat(feats, dim=-1)
-            elif len(feats) == 1:
-                feats = feats[0]
-            else:
-                raise ValueError('?!?!?!', feats)
-            feats = feats.float()
-            feats = self.state_feat_fc(feats)
-            feats = self.state_layer_norm(feats)
-            cat_feat[i] = torch.cat([cat_feat[i], feats], dim=-1)
-
-            if comm is not None:
-                # concat comm features for each agent
-                c = torch.reshape(comm[i], (1, self.comm_feat_dim))
-                cat_feat[i] = torch.cat([cat_feat[i], c], dim=-1)
-
-        return cat_feat
-
-
-class EncoderDecoder(nn.Module):
-    def __init__(self, obs_space, comm_len, discrete_comm, num_agents,
-                 ae_type='', img_feat_dim=64):
-        super(EncoderDecoder, self).__init__()
-        self.preprocessor = InputProcessor(obs_space, 0, num_agents, last_fc_dim=img_feat_dim)
-        in_size = self.preprocessor.feat_dim
-        if ae_type == 'rfc':
-            # random projection using fc
-            self.encoder = nn.Sequential(
-                nn.Linear(in_size, comm_len),
-                nn.Sigmoid(),
-            )
-        elif ae_type == 'rmlp':
-            # random projection using mlp
-            self.encoder = nn.Sequential(
-                nn.Linear(in_size, 128),
-                nn.ReLU(),
-                nn.Linear(128, 64),
-                nn.ReLU(),
-                nn.Linear(64, 32),
-                nn.ReLU(),
-                nn.Linear(32, comm_len),
-                nn.Sigmoid()
-            )
-        elif ae_type == 'fc':
-            # fc on AE
-            self.encoder = nn.Sequential(
-                nn.Linear(in_size, 128),
-                nn.ReLU(),
-                nn.Linear(128, 64),
-                nn.ReLU(),
-                nn.Linear(64, img_feat_dim),
-            )
-            self.fc = nn.Sequential(
-                nn.Linear(img_feat_dim, comm_len),
-                nn.Sigmoid(),
-            )
-            self.decoder = nn.Sequential(
-                nn.Linear(img_feat_dim, 64),
-                nn.ReLU(),
-                nn.Linear(64, 128),
-                nn.ReLU(),
-                nn.Linear(128, in_size),
-            )
-        elif ae_type == 'mlp':
-            # mlp on AE
-            self.encoder = nn.Sequential(
-                nn.Linear(in_size, 128),
-                nn.ReLU(),
-                nn.Linear(128, 64),
-                nn.ReLU(),
-                nn.Linear(64, img_feat_dim),
-            )
-            self.fc = nn.Sequential(
-                nn.Linear(img_feat_dim, img_feat_dim),
-                nn.ReLU(),
-                nn.Linear(img_feat_dim, img_feat_dim),
-                nn.ReLU(),
-                nn.Linear(img_feat_dim, comm_len),
-                nn.Sigmoid(),
-            )
-            self.decoder = nn.Sequential(
-                nn.Linear(img_feat_dim, 64),
-                nn.ReLU(),
-                nn.Linear(64, 128),
-                nn.ReLU(),
-                nn.Linear(128, in_size),
-            )
-        elif ae_type == '':
-            # AE
-            self.encoder = nn.Sequential(
-                nn.Linear(in_size, 128),
-                nn.ReLU(),
-                nn.Linear(128, 64),
-                nn.ReLU(),
-                nn.Linear(64, 32),
-                nn.ReLU(),
-                nn.Linear(32, comm_len),
-                nn.Sigmoid()
-            )
-            self.decoder = nn.Sequential(
-                nn.Linear(comm_len, 32),
-                nn.ReLU(),
-                nn.Linear(32, 64),
-                nn.ReLU(),
-                nn.Linear(64, 128),
-                nn.ReLU(),
-                nn.Linear(128, in_size),
-            )
-        else:
-            raise NotImplementedError
-
-
-        self.discrete_comm = discrete_comm
-        self.ae_type = ae_type
-
-    def decode(self, x):
-        """
-        input: inputs[f'agent_{i}']['comm'] (num_agents, comm_len)
-            (note that agent's own state is at the last index)
-        """
-        if self.ae_type:
-            # ['fc', 'mlp', 'rfc', 'rmlp']
-            return x
-        else:
-            return self.decoder(x)  # (num_agents, in_size)
-
-    def forward(self, feat):
-        encoded = self.encoder(feat)
-        if self.ae_type in {'rfc', 'rmlp'}:
-            # do not detach since there's no reconstruction loss
-            if self.discrete_comm:
-                encoded = STE.apply(encoded)
-            return encoded, torch.tensor(0.0)
-
-        elif self.ae_type in {'fc', 'mlp'}:
-            # get intermediate reconstruction loss
-            decoded = self.decoder(encoded)
-            loss = F.mse_loss(decoded, feat)
-
-            # detach encoded features and get comm
-            comm = self.fc(encoded.detach())
-            if self.discrete_comm:
-                comm = STE.apply(comm)
-            return comm, loss
-
-        elif self.ae_type == '':
-            if self.discrete_comm:
-                encoded = STE.apply(encoded)
-            decoded = self.decoder(encoded)
-            loss = F.mse_loss(decoded, feat)
-            return encoded.detach(), loss
-
-        else:
-            raise NotImplementedError
+    d = self.decoderdense(z)
+    d = torch.reshape(d, [-1, 4*256, 1, 1])
+    d = self.decoder(d)
+    d = torch.sigmoid(d)
+    
+    r_loss, kl_loss, log_sigma_opt= self.calculate_loss(mu, logvar, d, x)
+    loss = r_loss+kl_loss
+    return d, z, loss
 
 
 class AENetwork(A3CTemplate):
@@ -290,48 +106,52 @@ class AENetwork(A3CTemplate):
     """
     def __init__(self, obs_space, act_space, num_agents, comm_len,
                  discrete_comm, ae_pg=0, ae_type='', hidden_size=256,
-                 img_feat_dim=64):
+                 img_feat_dim=64, load_comm=True):
         super().__init__()
 
         # assume action space is a Tuple of 2 spaces
         self.env_action_size = act_space[0].n  # Discrete
         self.action_size = self.env_action_size
         self.ae_pg = ae_pg
-
+        self.comm_len=comm_len
+        
         self.num_agents = num_agents
-
-        self.comm_ae = EncoderDecoder(obs_space, comm_len, discrete_comm,
-                                      num_agents, ae_type=ae_type,
-                                      img_feat_dim=img_feat_dim)
-
-        feat_dim = self.comm_ae.preprocessor.feat_dim
-
-        if ae_type == '':
-            self.input_processor = InputProcessor(
-                obs_space,
-                feat_dim,
-                num_agents,
-                last_fc_dim=img_feat_dim)
-        else:
-            self.input_processor = InputProcessor(
-                obs_space,
-                comm_len,
-                num_agents,
-                last_fc_dim=img_feat_dim)
+        #comm_len is 96
+        self.comm_ae = ConvVAE(z_size=comm_len, kl_tolerance=0.5)
 
         # individual memories
-        self.feat_dim = self.input_processor.feat_dim + comm_len + self.action_size
-        print(self.feat_dim)
-        self.head = nn.ModuleList(
-            [LSTMhead(self.feat_dim, hidden_size, comm_len, num_layers=1
-                      ) for _ in range(num_agents)])
+        self.feat_dim =  self.comm_len + self.action_size
+        self.head = nn.ModuleList([MDNRNN(self.feat_dim, self.comm_len) for _ in range(num_agents)])
         self.is_recurrent = True
 
-        # separate AC for env action and comm action
-        self.env_critic_linear = nn.ModuleList([nn.Linear(
-            hidden_size+comm_len, 1) for _ in range(num_agents)])
-        self.env_actor_linear = nn.ModuleList([nn.Linear(
-            hidden_size+comm_len, self.env_action_size) for _ in range(num_agents)])
+        if load_comm:
+            model = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False)
+            chkpt = torch.load('commnet.pth')
+            model.load_state_dict(chkpt['net'])
+            self.comm_ae = model.comm_ae
+            model2 = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False)
+            chkpt = torch.load('lstmnet.pth')
+            model2.load_state_dict(chkpt['net'])
+            self.head = model2.head
+
+        if not load_comm:
+            self.LinearShrink = nn.Linear(hidden_size, img_feat_dim)
+
+            # separate AC for env action and comm action
+            self.env_critic_linear = nn.ModuleList([nn.Linear(
+                hidden_size+comm_len+img_feat_dim, 1) for _ in range(num_agents)])
+
+            self.env_actor_linear = nn.ModuleList([nn.Linear(
+                hidden_size+comm_len+img_feat_dim, self.env_action_size) for _ in range(num_agents)])
+        else:
+            self.LinearShrink = nn.Linear(hidden_size, img_feat_dim)
+
+            # separate AC for env action and comm action
+            self.env_critic_linear = nn.ModuleList([nn.Linear(
+                hidden_size+comm_len+hidden_size, 1) for _ in range(num_agents)])
+
+            self.env_actor_linear = nn.ModuleList([nn.Linear(
+                hidden_size+comm_len+hidden_size, self.env_action_size) for _ in range(num_agents)])
 
         self.reset_parameters()
         return
@@ -349,7 +169,7 @@ class AENetwork(A3CTemplate):
         return
 
     def init_hidden(self):
-        return [head.init_hidden() for head in self.head]
+        return [head.init_hidden(1) for head in self.head]
 
     def take_action(self, policy_logit, comm_out):
         act_dict = {}
@@ -362,7 +182,7 @@ class AENetwork(A3CTemplate):
             act_dict[agent_name] = act
             act_logp_dict[agent_name] = act_logp
             ent_list.append(ent)
-
+            #TODO: REMOVE   
             comm_act = (comm_out[int(agent_name[-1])]).cpu().numpy()
             all_act_dict[agent_name] = [act, comm_act]
         return act_dict, act_logp_dict, ent_list, all_act_dict
@@ -371,44 +191,63 @@ class AENetwork(A3CTemplate):
         assert type(inputs) is dict
         assert len(inputs.keys()) == self.num_agents + 1  # agents + global
 
-        # WARNING: the following code only works for Python 3.6 and beyond
 
-        # (1) pre-process inputs
-        comm_feat = []
+        pov = []
         for i in range(self.num_agents):
-            # TODO: How do I hijack the comm vector?
-            cf = self.comm_ae.decode(inputs[f'agent_{i}']['comm'][:-1])
-            if not self.ae_pg:
-                cf = cf.detach()
-            comm_feat.append(cf)
+            pov.append(inputs[f'agent_{i}']['pov'])
+        xs = torch.cat(pov, dim=0)
 
-        cat_feat = self.input_processor(inputs, comm_feat)
-        # (2) generate AE comm output and reconstruction loss
-        with torch.no_grad():
-            x = self.input_processor(inputs)
-        x = torch.cat(x, dim=0)
-        comm_out, comm_ae_loss = self.comm_ae(x)
+        decoded, comm_out, comm_ae_loss = self.comm_ae(xs)
+        comm_out = comm_out.detach()
+
 
         # (3) predict policy and values separately
         env_actor_out, env_critic_out = {}, {}
+        ys = []
         for i, agent_name in enumerate(inputs.keys()):
             if agent_name == 'global':
                 continue
             
-            # TODO: Change to cat action, comm_out[i], and cat_feat[i]
             env_act = F.one_hot(
                 inputs[f'agent_{i}']['self_env_act'].to(torch.int64),
                 num_classes=self.action_size)
             env_act = torch.reshape(env_act, (1, self.action_size))
-            cat_feat[i] = torch.cat([cat_feat[i], comm_out[i].unsqueeze(0),env_act],
-                                    dim=-1)
+            cat_feat = torch.cat([inputs[f'agent_{i}']['comm'][-1].unsqueeze(0),env_act],
+                                    dim=-1).unsqueeze(0)
 
-            x, hidden_state[i], lstm_loss = self.head[i](cat_feat[i], hidden_state[i], comm_out[i])
+            #insert zt-1 and at-1 with ht-1 to model zt and output ht with loss
+            x, hidden_state[i], lstm_loss = self.head[i](cat_feat, hidden_state[i], comm_out[i].view(1, -1, self.comm_len))
+            ys.append(x)
 
-            handz = torch.cat([hidden_state[i][0].squeeze(), comm_out[i]]).unsqueeze(0)
+        
+        # ds = []
+        # for l in range(5):
+        #     y_preds = torch.cat([torch.normal(mu, sigma)[:, :, l, :]for pi, mu, sigma, in ys])
+
+        #     d = self.comm_ae.decoderdense(y_preds)
+        #     d = torch.reshape(d, [-1, 4*256, 1, 1])
+        #     d = self.comm_ae.decoder(d)
+        #     d = torch.sigmoid(d)
+        #     ds.append(d)
+
+
+        mapped_hs = torch.cat([p[0].clone().detach() for p in hidden_state], dim=0).cuda()
+        #current_hs = [p[0].clone().detach() for p in hidden_state]
+        
+        #mapped_hs = self.LinearShrink(mapped_hs)
+        # save_image(xs.cpu(), 'og.png')
+        # save_image(decoded.cpu(), 'decoded.png')
+        # for l in range(5):
+        #     save_image(ds[i].detach().cpu(), f'lstm_{i}.png')
+
+        for i, agent_name in enumerate(inputs.keys()):
+            otheragent = 1 if i==0 else 0
+            if agent_name == 'global':
+                continue
+            # predict next action at with ht, zt, and commht-1
+            handz = torch.cat([mapped_hs[i].squeeze(), comm_out[i], mapped_hs[otheragent].squeeze()]).unsqueeze(0)
             env_actor_out[agent_name] = self.env_actor_linear[i](handz)
             env_critic_out[agent_name] = self.env_critic_linear[i](handz)
-
             # mask logits of unavailable actions if provided
             if env_mask_idx and env_mask_idx[i]:
                 env_actor_out[agent_name][0, env_mask_idx[i]] = -1e10

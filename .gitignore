@@ -157,5 +157,11 @@ cython_debug/
 # Editor swap
 *.swp
 
+# Results
 runs/
+*.pth
+*.png
+*.mp4
+tb/
+tb_ae/
 

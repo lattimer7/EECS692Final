@@ -30,6 +30,7 @@ class PressurePlateMultiGrid(MultiGridEnv):
         self.grid.wall_rect(0, 0, width, height)
 
         self.red_door = EnvLockedDoor(0.5, color='red', state=FreeDoor.states.closed)
+        self.red_door = EnvLockedDoor(color='red', state=FreeDoor.states.locked)
 
         self.pressure_plate = PressurePlate(0.5, color='orange')
 
@@ -51,16 +52,16 @@ class PressurePlateMultiGrid(MultiGridEnv):
         #    posx = self.np_random.randint(1, self.size//2+1)
         #    self.grid.set(posx, posy, self.pressure_plate)
         #    self.pressure_plate.pos = np.asarray([posx, posy])
-
-            # Add a red/blue door at a random position in the right wall
-            pos = self.np_random.randint(1, self.width - 1)
-            self.grid.set(self.width - 1, pos, self.red_door)
-            self.red_door.pos = np.asarray([self.width - 1, pos])
+            posy = self.np_random.randint(1, self.width - 1)
+            posx = self.np_random.randint(self.width//2, self.width - 1)
+            self.grid.set(posx, posy, self.pressure_plate)
+            self.pressure_plate.pos = np.asarray([posx, posy])
 
         posy = self.np_random.randint(1, self.size - 1)
         posx = self.np_random.randint(1, self.width-1)
         self.grid.set(posx, posy, self.pressure_plate)
         self.pressure_plate.pos = np.asarray([posx, posy])
+
         return None
 
     def _reward(self):
@@ -98,6 +99,7 @@ class PressurePlateMultiGrid(MultiGridEnv):
     def step(self, action_dict):
         actions = [action_dict[f'agent_{i}'][0] for i in range(len(self.agents))]
         red_door_opened_before = self.red_door.been_toggled
+        red_door_opened_before = self.red_door.is_open()
         pressure_plate_active_before = any([agent.at_pos(self.pressure_plate.pos) for agent in self.agents])
         pressure_plate_agents_before =  np.array([agent.at_pos(self.pressure_plate.pos) for agent in self.agents])
         
@@ -113,25 +115,30 @@ class PressurePlateMultiGrid(MultiGridEnv):
         if (not red_door_opened_before) and red_door_tried_after:
             step_rewards = step_rewards + np.array([float(self.red_door.reward) if actions[i]==5 else float(0) for i, agent in enumerate(self.agents)], dtype=float)
 
+        red_door_opened_after = self.red_door.is_open()
+        pressure_plate_active_after = any([agent.at_pos(self.pressure_plate.pos) for agent in self.agents])
+        pressure_plate_agents_after =  np.array([agent.at_pos(self.pressure_plate.pos) for agent in self.agents])
+        
+        
         done = [self.agents[i].at_pos(self.red_door.pos) for i in range(self.num_agents)]
         
         if any(done):
             self.red_door.unlock()
-            step_rewards += self._reward()
+
         elif pressure_plate_active_after:
             self.red_door.unlock()
         else:
             self.red_door.lock()
 
-        #for i,d in enumerate(done):
-        #    if d is False: continue
+        for i,d in enumerate(done):
+            if d is False: continue
             # Give reward and deactivate the agent if done.
-        #    if self.agents[i].done is False:
-        #        self.agents[i].done = True
-        #        step_rewards[i] += 1
-        #    self.agents[i].deactivate()
+            if self.agents[i].done is False:
+                self.agents[i].done = True
+                step_rewards[i] += 1
+            self.agents[i].deactivate()
         
-        success = any(done)
+        success = all(done)
 
         timeout = (self.step_count >= self.max_steps)
 

@@ -9,6 +9,57 @@ import torch.nn.functional as F
 
 from model.init import weights_init
 
+def mdn_loss_fn(y, pi, mu, sigma):
+    m = torch.distributions.Normal(loc=mu, scale=sigma)
+    loss = torch.exp(m.log_prob(y))
+    loss = torch.sum(loss * pi, dim=2)
+    loss = -torch.log(loss)
+    return loss.mean()
+
+def criterion(y, pi, mu, sigma):
+    y = y.unsqueeze(2)
+    return mdn_loss_fn(y, pi, mu, sigma)
+
+
+class MDNRNN(nn.Module):
+    def __init__(self, in_z_size, out_z_size, n_hidden=256, n_gaussians=5, n_layers=1):
+        super(MDNRNN, self).__init__()
+
+        self.out_z_size = out_z_size
+        self.in_z_size = in_z_size
+        self.n_hidden = n_hidden
+        self.n_gaussians = n_gaussians
+        self.n_layers = n_layers
+        
+        self.lstm = nn.LSTM(in_z_size, n_hidden, n_layers, batch_first=True)
+        self.fc1 = nn.Linear(n_hidden, n_gaussians*out_z_size)
+        self.fc2 = nn.Linear(n_hidden, n_gaussians*out_z_size)
+        self.fc3 = nn.Linear(n_hidden, n_gaussians*out_z_size)
+        
+    def get_mixture_coef(self, y):
+        rollout_length = y.size(1)
+        pi, mu, sigma = self.fc1(y), self.fc2(y), self.fc3(y)
+        
+        pi = pi.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
+        mu = mu.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
+        sigma = sigma.view(-1, rollout_length, self.n_gaussians, self.out_z_size)
+        
+        pi = F.softmax(pi, 2)
+        sigma = torch.exp(sigma)
+        return pi, mu, sigma
+        
+        
+    def forward(self, x, h, targets):
+        # Forward propagate LSTM
+        y, (h, c) = self.lstm(x, h)
+        pi, mu, sigma = self.get_mixture_coef(y)
+        loss = criterion(targets, pi, mu, sigma)
+        return (pi, mu, sigma), (h, c), loss
+    
+    def init_hidden(self, bsz):
+        return (torch.zeros(self.n_layers, bsz, self.n_hidden).cuda(),
+                torch.zeros(self.n_layers, bsz, self.n_hidden).cuda())
+
 
 class LSTMhead(nn.Module):
     def __init__(self, in_dim, hidden_dim, proj_dim, num_layers=1):
@@ -16,7 +67,9 @@ class LSTMhead(nn.Module):
         self.is_recurrent = True
         self.lstm = nn.LSTM(in_dim, hidden_dim, num_layers=num_layers)
         self.hidden_shape = (2, 1, 1, 256)
-        self.linear = nn.Linear(256, proj_dim)
+        self.linear1 = nn.Linear(256, 128)
+        self.linear2 = nn.Linear(128, 64)
+        self.linear3 = nn.Linear(64, proj_dim)
         self.reset_parameters()
         return
 
@@ -25,12 +78,14 @@ class LSTMhead(nn.Module):
         self.lstm.weight_hh_l0.data.fill_(0)
         return
 
-    def forward(self, x, hidden_state, comm_out):
+    def forward(self, x, hidden_state, zt):
         x = x.unsqueeze(0)
         x, hidden_state = self.lstm(x, hidden_state)
         x=x.squeeze()
-        x = self.linear(x)
-        loss = F.mse_loss(x, comm_out)
+        x = F.relu(self.linear1(x))
+        x = F.relu(self.linear2(x))
+        x = self.linear3(x)
+        loss = F.mse_loss(x, zt)
         return x, hidden_state, loss
    
     def init_hidden(self):

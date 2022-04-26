@@ -13,6 +13,18 @@ ENV_ACT_ID_TO_STR = {
 }
 
 
+def normalize_dict_obs(obs_dict):
+    for k, v in obs_dict.items():
+        if k == 'global':
+            continue
+
+        if isinstance(v, dict):
+            obs_dict[k]['pov'] = (v['pov'] / 255.)
+        else:
+            obs_dict[k] = (v / 255.)
+    return obs_dict
+
+
 class DictObservationNormalizationWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
@@ -20,15 +32,12 @@ class DictObservationNormalizationWrapper(gym.Wrapper):
 
     def step(self, action):
         obs_dict, rew_dict, done_dict, info_dict = self.env.step(action)
-        for k, v in obs_dict.items():
-            if k == 'global':
-                continue
-
-            if isinstance(v, dict):
-                obs_dict[k]['pov'] = (2. * ((v['pov'] / 255.) - 0.5))
-            else:
-                obs_dict[k] = (2. * ((v / 255.) - 0.5))
+        obs_dict = normalize_dict_obs(obs_dict)
         return obs_dict, rew_dict, done_dict, info_dict
+        
+    def reset(self):
+        obs_dict = self.env.reset()
+        return normalize_dict_obs(obs_dict)
 
 
 class GridWorldEvaluatorWrapper(gym.Wrapper):
