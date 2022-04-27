@@ -259,6 +259,18 @@ class FreeDoor(WorldObj):
     class states(IntEnum):
         open = 1
         closed = 2
+    
+    def __init__(self, reward = 0.5, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reward = reward
+        self.rewarded_agents = []
+
+    def get_reward(self, agent):
+        if agent not in self.rewarded_agents:
+            self.rewarded_agents.append(agent)
+            return self.reward
+        else:
+            return 0
 
     def is_open(self):
         return self.state == self.states.open
