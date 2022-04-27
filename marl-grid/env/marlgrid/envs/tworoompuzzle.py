@@ -104,7 +104,7 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
         self.exits = []
         self.exits.append(place_obj(self.grid, origin_cell, self.games[0])[0])
         self.exits.append(place_obj(self.grid, exit_cell, self.games[1])[0])
-        exits = self.exits[-1]
+        exits = [self.exits[-1]]
 
         # Change the way that agents spawn here
         # and change the spawn delay so that they
