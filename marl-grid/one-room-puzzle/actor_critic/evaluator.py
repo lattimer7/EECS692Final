@@ -158,9 +158,11 @@ class Evaluator(mp.Process):
 
                 # log games if we have it
                 if 'games' in info:
-                    for game in info['games']:
+                    for i,game in enumerate(info['games']):
                         game_eps_dict[game] += 1
-                        game_dict[game] += int(info['success'])
+                        game_eps_dict[f'game_{i}'] += 1
+                        game_dict[game] += int(info['game_done'][i])
+                        game_dict[f'game_{i}'] += int(info['game_done'][i])
 
             # average logged info
             for k, v in log_dict.items():

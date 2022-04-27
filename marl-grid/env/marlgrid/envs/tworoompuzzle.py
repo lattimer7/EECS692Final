@@ -75,6 +75,7 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
         # Get the generator objects and update mission
         # TODO: will this update the mission?
         self.games = [self.generators[v].generate(self, exit_walls[i]) for i,v in enumerate(gen_id)]
+        self.game_names = [self.generators[v].name for v in gen_id]
         self.mission = "TwoRoom: " + \
                         self.games[0].mission + "; " + \
                         self.games[1].mission
@@ -100,8 +101,10 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
             return exits
         
         # Place the objects for both games
-        place_obj(self.grid, origin_cell, self.games[0])
-        exits = place_obj(self.grid, exit_cell, self.games[1])
+        self.exits = []
+        self.exits.append(place_obj(self.grid, origin_cell, self.games[0])[0])
+        self.exits.append(place_obj(self.grid, exit_cell, self.games[1])[0])
+        exits = self.exits[-1]
 
         # Change the way that agents spawn here
         # and change the spawn delay so that they
@@ -211,7 +214,9 @@ class TwoRoomPuzzleMultiGrid(MultiGridEnv):
             'success': success,
             'comm': obs_dict['global']['comm_act'].tolist(),
             'env_act': obs_dict['global']['env_act'].tolist(),
-            't': self.step_count
+            't': self.step_count,
+            'games': self.game_names,
+            'game_done': [len(exit.rewarded_agents) == len(self.agents) for exit in self.exits]
         }
         # Assume the room_info and env_info are overwritable for now.
         info_dict = {**env_info, **room_info}

@@ -153,7 +153,8 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
             'comm': obs_dict['global']['comm_act'].tolist(),
             'env_act': obs_dict['global']['env_act'].tolist(),
             't': self.step_count,
-            'games': [self.current_game_name]
+            'games': [self.current_game_name],
+            'game_done': [success]
         }
         # Assume the room_info and env_info are overwritable for now.
         info_dict = {**env_info, **room_info}
