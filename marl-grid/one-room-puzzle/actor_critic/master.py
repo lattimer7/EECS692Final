@@ -67,6 +67,7 @@ class Master(object):
 
         # print(f'Conv: {max([param.grad.max() for name, param in net.named_parameters()  if param.requires_grad and param.grad is not None and "conv_vae" in name])}')
         # print(f'LSTM: {max([param.grad.max() for name, param in net.named_parameters()  if param.requires_grad and param.grad is not None and "head" in name])}')
+        # print([f'{name}: {param.grad.max()}' for name, param in net.named_parameters()  if param.requires_grad and param.grad is not None ])
 
         torch.nn.utils.clip_grad_norm_(net.parameters(), 40.0)
 

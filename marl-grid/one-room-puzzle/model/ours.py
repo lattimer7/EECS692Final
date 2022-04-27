@@ -84,20 +84,12 @@ class ConvVAE(nn.Module):
 
   def forward(self, x):
     h = self.encoder(x)
-    # if torch.isinf(h).any():
-    #     print('encoder')
     h = torch.reshape(h, [-1, 2*2*256])
-    # if torch.isinf(h).any():
-    #     print('reshape')
     mu = self.mu(h)
     logvar = self.logvar(h)
     sigma = torch.exp(logvar / 2.0)
-    # if torch.isinf(sigma).any():
-    #     print('sigma')
     epsilon = self.N.sample(mu.shape)
-    # z = self.sampling([mu, logvar])
-    # if torch.isinf(epsilon).any():
-    #     print('epsilon')
+
     z = mu + sigma * epsilon
 
     d = self.decoderdense(z)
@@ -214,34 +206,34 @@ class AENetwork(A3CTemplate):
         self.head = nn.ModuleList([MDNRNN(self.feat_dim, self.comm_len) for _ in range(num_agents)])
         self.is_recurrent = True
 
-        # if load_comm:
-        #     model = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False)
-        #     chkpt = torch.load('commnet.pth')
-        #     model.load_state_dict(chkpt['net'])
-        #     self.conv_vae = model.conv_vae
-        #     model2 = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False)
-        #     chkpt = torch.load('lstmnet.pth')
-        #     model2.load_state_dict(chkpt['net'])
-        #     self.head = model2.head
+        if load_comm:
+            model = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False)
+            chkpt = torch.load('commnet.pth')
+            model.load_state_dict(chkpt['net'])
+            self.conv_vae = model.conv_vae
+            model2 = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False)
+            chkpt = torch.load('lstmnet.pth')
+            model2.load_state_dict(chkpt['net'])
+            self.head = model2.head
 
-        if not load_comm:
-            self.LinearShrink = nn.Linear(hidden_size, img_feat_dim)
+        # if not load_comm:
+        # self.LinearShrink = nn.Linear(hidden_size, img_feat_dim)
 
-            # separate AC for env action and comm action
-            self.env_critic_linear = nn.ModuleList([nn.Linear(
-                hidden_size+comm_len+img_feat_dim, 1) for _ in range(num_agents)])
+        # # separate AC for env action and comm action
+        # self.env_critic_linear = nn.ModuleList([nn.Linear(
+        #     hidden_size+comm_len+img_feat_dim, 1) for _ in range(num_agents)])
 
-            self.env_actor_linear = nn.ModuleList([nn.Linear(
-                hidden_size+comm_len+img_feat_dim, self.env_action_size) for _ in range(num_agents)])
-        else:
-            self.LinearShrink = nn.Linear(hidden_size, img_feat_dim)
+        # self.env_actor_linear = nn.ModuleList([nn.Linear(
+        #     hidden_size+comm_len+img_feat_dim, self.env_action_size) for _ in range(num_agents)])
+        # else:
+        self.LinearShrink = nn.Linear(hidden_size, img_feat_dim)
 
-            # separate AC for env action and comm action
-            self.env_critic_linear = nn.ModuleList([nn.Linear(
-                hidden_size+comm_len+hidden_size, 1) for _ in range(num_agents)])
+        # separate AC for env action and comm action
+        self.env_critic_linear = nn.ModuleList([nn.Linear(
+            hidden_size+comm_len+hidden_size, 1) for _ in range(num_agents)])
 
-            self.env_actor_linear = nn.ModuleList([nn.Linear(
-                hidden_size+comm_len+hidden_size, self.env_action_size) for _ in range(num_agents)])
+        self.env_actor_linear = nn.ModuleList([nn.Linear(
+            hidden_size+comm_len+hidden_size, self.env_action_size) for _ in range(num_agents)])
 
         self.reset_parameters()
         return
@@ -267,6 +259,7 @@ class AENetwork(A3CTemplate):
         ent_list = []
         all_act_dict = {}
         for agent_name, logits in policy_logit.items():
+
             act, act_logp, ent = super(AENetwork, self).take_action(logits)
 
             act_dict[agent_name] = act
@@ -288,8 +281,7 @@ class AENetwork(A3CTemplate):
         xs = torch.cat(pov, dim=0)
 
         decoded, comm_out, ae_loss = self.conv_vae(xs)
-        comm_out = comm_out.detach()
-
+        comm_out = comm_out.clone().detach()
 
         # (3) predict policy and values separately
         env_actor_out, env_critic_out = {}, {}
@@ -309,30 +301,31 @@ class AENetwork(A3CTemplate):
             x, hidden_state[i], lstm_loss = self.head[i](cat_feat, hidden_state[i], comm_out[i].view(1, -1, self.comm_len))
             ys.append(x)
 
-        
-        # ds = []
-        # for l in range(5):
-        #     y_preds = torch.cat([torch.normal(mu, sigma)[:, :, l, :]for pi, mu, sigma, in ys])
+        ds = []
+        for l in range(5):
+            y_preds = torch.cat([torch.normal(mu, torch.exp(sigma))[:, l].unsqueeze(0) for pi, mu, sigma, in ys], dim=0)
+            print(comm_out.shape)
+            print(y_preds.shape)
 
-        #     d = self.conv_vae.decoderdense(y_preds)
-        #     d = torch.reshape(d, [-1, 4*256, 1, 1])
-        #     d = self.conv_vae.decoder(d)
-        #     d = torch.sigmoid(d)
-        #     ds.append(d)
+            d = self.conv_vae.decoderdense(y_preds)
+            d = torch.reshape(d, [-1, 4*256, 1, 1])
+            d = self.conv_vae.decoder(d)
+            d = torch.sigmoid(d)
+            ds.append(d)
 
 
         mapped_hs = torch.cat([p[0].clone().detach() for p in hidden_state], dim=0).cuda()
         #current_hs = [p[0].clone().detach() for p in hidden_state]
         
-        #mapped_hs = self.LinearShrink(mapped_hs)
+        # mapped_hs = self.LinearShrink(mapped_hs)
         # self.counter += 1
         # if self.counter > 4000:
         #     print("SAVING")
-        #     save_image(xs.cpu(), 'og.png')
-        #     save_image(decoded.cpu(), 'decoded.png')
-        #     self.counter = 0
-        # for l in range(5):
-        #     save_image(ds[i].detach().cpu(), f'lstm_{i}.png')
+        save_image(xs.cpu(), 'og.png')
+        save_image(decoded.cpu(), 'decoded.png')
+            # self.counter = 0
+        for l in range(5):
+            save_image(ds[l].clone().detach().cpu(), f'lstm_{l}.png')
 
         for i, agent_name in enumerate(inputs.keys()):
             otheragent = 1 if i==0 else 0
@@ -345,6 +338,5 @@ class AENetwork(A3CTemplate):
             # mask logits of unavailable actions if provided
             if env_mask_idx and env_mask_idx[i]:
                 env_actor_out[agent_name][0, env_mask_idx[i]] = -1e10
-
         return env_actor_out, env_critic_out, hidden_state, \
                comm_out.detach(), (ae_loss, lstm_loss)

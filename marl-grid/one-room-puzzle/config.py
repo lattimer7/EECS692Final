@@ -81,7 +81,7 @@ def get_config(args, eval=False):
     config.tmax = 20
 
     # max total training iterations
-    config.train_iter = 500000
+    config.train_iter = 1#500000
 
     config.lr = 0.0001
 
