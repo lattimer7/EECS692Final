@@ -157,7 +157,7 @@ class Evaluator(mp.Process):
                 log_dict['success'] += int(info['success'])
 
                 # log games if we have it
-                if (hasattr(info,'games')):
+                if 'games' in info:
                     for game in info['games']:
                         game_eps_dict[game] += 1
                         game_dict[game] += int(info['success'])
