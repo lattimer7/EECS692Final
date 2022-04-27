@@ -265,7 +265,7 @@ class FreeDoor(WorldObj):
 
     def can_overlap(self):
         # Change this so the agents can actually go through the door after open
-        return False
+        return self.is_open()
 
     def see_behind(self):
         return self.is_open()
