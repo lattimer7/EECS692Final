@@ -73,6 +73,8 @@ class Evaluator(mp.Process):
             weight_iter = self.master.copy_weights(self.net)
 
             log_dict = defaultdict(int)
+            game_dict = defaultdict(int)
+            game_eps_dict = defaultdict(int)
             for eval_id in range(self.num_eval_episodes):
                 env_copy = copy.deepcopy(self.eval_env[eval_id])
 
@@ -154,9 +156,20 @@ class Evaluator(mp.Process):
                 log_dict['timeout'] += int(info['timeout'])
                 log_dict['success'] += int(info['success'])
 
+                # log games if we have it
+                if (hasattr(info,'games')):
+                    for game in info['games']:
+                        game_eps_dict[game] += 1
+                        game_dict[game] += int(info['success'])
+
             # average logged info
             for k, v in log_dict.items():
                 self.master.writer.add_scalar(k, v / self.num_eval_episodes,
+                                              weight_iter)
+            
+            # average logged info for game successes
+            for k, v in game_dict.items():
+                self.master.writer.add_scalar(k, v / float(game_eps_dict[k]),
                                               weight_iter)
 
             # save weights

@@ -82,4 +82,5 @@ class SinglePressurePlateGameGenerator(BasePuzzleGameGenerator):
     
     PuzzleGame = SinglePressurePlateGame
     config = {}
+    name = "SinglePressurePlate"
 

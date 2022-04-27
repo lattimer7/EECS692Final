@@ -138,4 +138,5 @@ class ColorBlindGameGenerator(BasePuzzleGameGenerator):
     
     PuzzleGame = ColorBlindGame
     config = {}
+    name = "ColorBlindKeys"
 

@@ -124,4 +124,5 @@ class ColorOrderedLeversGameGenerator(BasePuzzleGameGenerator):
     
     PuzzleGame = ColorOrderedLeversGame
     config = {}
+    name = "ColorOrderedLevers"
 

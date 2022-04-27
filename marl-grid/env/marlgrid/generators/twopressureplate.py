@@ -66,4 +66,5 @@ class TwoPressurePlateGameGenerator(BasePuzzleGameGenerator):
     
     PuzzleGame = TwoPressurePlateGame
     config = {}
+    name = "TwoPressurePlate"
 

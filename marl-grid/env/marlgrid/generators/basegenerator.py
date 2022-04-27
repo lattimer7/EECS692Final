@@ -120,6 +120,7 @@ class BasePuzzleGameGenerator:
     
     PuzzleGame = BasePuzzleGame
     config = {}
+    name = "BaseGame"
 
     def __init__(self, width, height, config=None):
         self.width = width

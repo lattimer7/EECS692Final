@@ -44,6 +44,7 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
         # Get the generator objects and update mission
         # TODO: will this update the mission?
         self.current_game = self.generators[gen_id].generate(self)
+        self.current_game_name = self.generators[gen_id].name
         self.mission = self.current_game.mission
 
         # Add all objects that are not boundary walls.
@@ -151,7 +152,8 @@ class OneRoomPuzzleMultiGrid(MultiGridEnv):
             'success': success,
             'comm': obs_dict['global']['comm_act'].tolist(),
             'env_act': obs_dict['global']['env_act'].tolist(),
-            't': self.step_count
+            't': self.step_count,
+            'games': [self.current_game_name]
         }
         # Assume the room_info and env_info are overwritable for now.
         info_dict = {**env_info, **room_info}

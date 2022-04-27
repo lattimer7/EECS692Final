@@ -176,4 +176,5 @@ class CycleBoxColorGameGenerator(BasePuzzleGameGenerator):
     
     PuzzleGame = CycleBoxColorGame
     config = {}
+    name = "CycleBoxColor"
 
