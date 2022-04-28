@@ -62,7 +62,7 @@ class ConvVAE(nn.Module):
     r_loss = torch.sum((predictions - targets).pow(2), dim=(1, 2, 3))
     r_loss = torch.mean(r_loss)
     # compute the KL loss
-    kl_loss = -0.5 * torch.sum(1 + log_variance - mean.pow(2) - log_variance.exp(), dim=-1)
+    kl_loss = -0.2 * torch.sum(1 + log_variance - mean.pow(2) - log_variance.exp(), dim=-1)
     kl_loss = torch.maximum(kl_loss, torch.tensor(self.kl_tolerance * self.z_size))
     # return the average loss over all images in batch
     total_loss = r_loss + torch.mean(kl_loss)
@@ -216,7 +216,7 @@ class AENetwork(A3CTemplate):
 
         # if load_comm:
         #     model = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False)
-        #     chkpt = torch.load('commnet.pth')
+        #     chkpt = torch.load('commnet_25k.pth')
         #     model.load_state_dict(chkpt['net'])
         #     self.conv_vae = model.conv_vae
         #     model2 = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False)
@@ -224,24 +224,24 @@ class AENetwork(A3CTemplate):
         #     model2.load_state_dict(chkpt['net'])
         #     self.head = model2.head
 
-        if not load_comm:
-            self.LinearShrink = nn.Linear(hidden_size, img_feat_dim)
+        # if not load_comm:
+        #     self.LinearShrink = nn.Linear(hidden_size, img_feat_dim)
 
-            # separate AC for env action and comm action
-            self.env_critic_linear = nn.ModuleList([nn.Linear(
-                hidden_size+comm_len+img_feat_dim, 1) for _ in range(num_agents)])
+        #     # separate AC for env action and comm action
+        #     self.env_critic_linear = nn.ModuleList([nn.Linear(
+        #         hidden_size+comm_len+img_feat_dim, 1) for _ in range(num_agents)])
 
-            self.env_actor_linear = nn.ModuleList([nn.Linear(
-                hidden_size+comm_len+img_feat_dim, self.env_action_size) for _ in range(num_agents)])
-        else:
-            self.LinearShrink = nn.Linear(hidden_size, img_feat_dim)
+        #     self.env_actor_linear = nn.ModuleList([nn.Linear(
+        #         hidden_size+comm_len+img_feat_dim, self.env_action_size) for _ in range(num_agents)])
+        # else:
+        self.LinearShrink = nn.Linear(hidden_size, img_feat_dim)
 
-            # separate AC for env action and comm action
-            self.env_critic_linear = nn.ModuleList([nn.Linear(
-                hidden_size+comm_len+hidden_size, 1) for _ in range(num_agents)])
+        # separate AC for env action and comm action
+        self.env_critic_linear = nn.ModuleList([nn.Linear(
+            hidden_size+comm_len+hidden_size, 1) for _ in range(num_agents)])
 
-            self.env_actor_linear = nn.ModuleList([nn.Linear(
-                hidden_size+comm_len+hidden_size, self.env_action_size) for _ in range(num_agents)])
+        self.env_actor_linear = nn.ModuleList([nn.Linear(
+            hidden_size+comm_len+hidden_size, self.env_action_size) for _ in range(num_agents)])
 
         self.reset_parameters()
         return

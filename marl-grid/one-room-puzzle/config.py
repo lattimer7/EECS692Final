@@ -101,6 +101,7 @@ def get_config(args, eval=False):
     # training
     config.anneal_comm_rew = False
     config.ae_loss_k = 1.0
+    config.ae_stop = 25000
     config.lstm_loss_k = 1.0
     config.ae_pg = 0
     config.ae_type = ''  # ['', 'fc', 'mlp', 'rfc', 'rmlp']

@@ -82,6 +82,7 @@ if __name__ == '__main__':
                                worker_id=worker_id,
                                gpu_id=gpu_id,
                                ae_loss_k=cfg.ae_loss_k,
+                               ae_stop=cfg.ae_stop,
                                lstm_loss_k=cfg.lstm_loss_k),]
 
     # (4) create a separate process to dump latest result (optional)
