@@ -38,19 +38,19 @@ if __name__ == '__main__':
     create_env = lambda: make_environment(cfg.env_cfg)
     env = create_env()
 
-    create_net = lambda: AENetwork(obs_space=env.observation_space,
+    create_net = lambda gpu_id: AENetwork(obs_space=env.observation_space,
                                    act_space=env.action_space,
                                    num_agents=cfg.env_cfg.num_agents,
                                    comm_len=cfg.env_cfg.comm_len,
                                    discrete_comm=cfg.env_cfg.discrete_comm,
                                    ae_pg=cfg.ae_pg,
                                    ae_type=cfg.ae_type,
-                                   img_feat_dim=cfg.img_feat_dim)
+                                   img_feat_dim=cfg.img_feat_dim, gpu_id=gpu_id)
 
     # (2) create master network.
     # hogwild-style update will be applied to the master weight.
     master_lock = mp.Lock()
-    net = create_net()
+    net = create_net(None)
     net.share_memory()
 
     opt = SharedAdam(net.parameters(), lr=cfg.lr)
@@ -77,18 +77,19 @@ if __name__ == '__main__':
 
         with torch.cuda.device(gpu_id):
             workers += [Worker(master,
-                               create_net().cuda(),
+                               create_net(gpu_id).cuda(),
                                create_env(),
                                worker_id=worker_id,
                                gpu_id=gpu_id,
                                ae_loss_k=cfg.ae_loss_k,
+                               ae_stop=cfg.ae_stop,
                                lstm_loss_k=cfg.lstm_loss_k),]
 
     # (4) create a separate process to dump latest result (optional)
     eval_gpu_id = cfg.gpu[-1]
 
     with torch.cuda.device(eval_gpu_id):
-        evaluator = Evaluator(master, create_net().cuda(), create_env(),
+        evaluator = Evaluator(master, create_net(eval_gpu_id).cuda(), create_env(),
                               save_dir_fmt=save_dir_fmt,
                               gpu_id=eval_gpu_id,
                               sleep_duration=10,

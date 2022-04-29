@@ -39,7 +39,7 @@ class Worker(mp.Process):
     """
 
     def __init__(self, master, net, env, worker_id, gpu_id=0, t_max=20,
-                 gamma=0.99, tau=1.0, ae_loss_k=1.0, lstm_loss_k=1.0):
+                 gamma=0.99, tau=1.0, ae_loss_k=1.0, ae_stop=25000, lstm_loss_k=1.0):
         super().__init__()
 
         self.worker_id = worker_id
@@ -56,6 +56,7 @@ class Worker(mp.Process):
         self.agents = [f'agent_{i}' for i in range(self.env.num_agents)]
         self.num_acts = 1
         self.ae_loss_k = ae_loss_k
+        self.ae_stop = ae_stop
         self.lstm_loss_k = lstm_loss_k
 
     @within_cuda_device
@@ -184,7 +185,7 @@ class Worker(mp.Process):
                         els.append(ops.to_numpy(el))
 
                         reward_log += reward[agent]
-                        loss += (tl) + lstm_loss * self.lstm_loss_k #+ ae_loss * self.ae_loss_k
+                        loss += (tl) + lstm_loss * self.lstm_loss_k + ((ae_loss * self.ae_loss_k) if weight_iter < self.ae_stop else 0)
 
                     all_pls[aid].append(np.mean(pls))
                     all_vls[aid].append(np.mean(vls))
@@ -207,7 +208,8 @@ class Worker(mp.Process):
                     log_dict[f'policy_loss/{act}'] = np.mean(all_pls[act_id])
                     log_dict[f'value_loss/{act}'] = np.mean(all_vls[act_id])
                     log_dict[f'entropy/{act}'] = np.mean(all_els[act_id])
-                log_dict['ae_loss'] = np.mean(ae_losses)
+                if weight_iter < self.ae_stop:
+                    log_dict['ae_loss'] = np.mean(ae_losses)
                 log_dict['lstm_loss'] = np.mean(lstm_losses)
 
                 for k, v in log_dict.items():
