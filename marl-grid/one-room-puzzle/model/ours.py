@@ -13,7 +13,7 @@ from model.a3c_template import A3CTemplate, take_action, take_comm_action
 from model.init import normalized_columns_initializer, weights_init
 
 class ConvVAE(nn.Module):
-  def __init__(self, z_size=32, learning_rate=0.0001, kl_tolerance=0.5, is_training=False, reuse=False, gpu_mode=False):
+  def __init__(self, z_size=32, learning_rate=0.0001, kl_tolerance=0.5, is_training=False, reuse=False, gpu_mode=False, gpu_id=None):
     super().__init__()
     self.z_size = z_size
     self.learning_rate = learning_rate
@@ -45,8 +45,10 @@ class ConvVAE(nn.Module):
         nn.ConvTranspose2d(32, 3, 6, stride=2)
     )
     self.N = torch.distributions.Normal(0, 1)
-    self.N.loc = self.N.loc.cuda() # hack to get sampling on the GPU
-    self.N.scale = self.N.scale.cuda()
+    if gpu_id is not None:
+        with torch.cuda.device(gpu_id):
+            self.N.loc = self.N.loc.cuda() # hack to get sampling on the GPU
+            self.N.scale = self.N.scale.cuda()
     # self.sampling = Lambda(self.sample)
 
 #   def calculate_loss(self, mean, log_variance, predictions, targets):
@@ -195,7 +197,7 @@ class AENetwork(A3CTemplate):
     """
     def __init__(self, obs_space, act_space, num_agents, comm_len,
                  discrete_comm, ae_pg=0, ae_type='', hidden_size=256,
-                 img_feat_dim=64, load_comm=True):
+                 img_feat_dim=64, load_comm=True, gpu_id=None):
         super().__init__()
 
         # assume action space is a Tuple of 2 spaces
@@ -207,7 +209,7 @@ class AENetwork(A3CTemplate):
         
         self.num_agents = num_agents
         #comm_len is 96
-        self.conv_vae = ConvVAE(z_size=comm_len, kl_tolerance=0.5)
+        self.conv_vae = ConvVAE(z_size=comm_len, kl_tolerance=0.5, gpu_id=gpu_id)
 
         # individual memories
         self.feat_dim =  self.comm_len + self.action_size
@@ -215,11 +217,11 @@ class AENetwork(A3CTemplate):
         self.is_recurrent = True
 
         # if load_comm:
-        #     model = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False)
+        #     model = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False, gpu_id=gpu_id)
         #     chkpt = torch.load('commnet_25k.pth')
         #     model.load_state_dict(chkpt['net'])
         #     self.conv_vae = model.conv_vae
-        #     model2 = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False)
+        #     model2 = AENetwork(obs_space, act_space, num_agents, comm_len, discrete_comm, ae_pg=0, ae_type='', hidden_size=256, img_feat_dim=64, load_comm=False, gpu_id=gpu_id)
         #     chkpt = torch.load('lstmnet.pth')
         #     model2.load_state_dict(chkpt['net'])
         #     self.head = model2.head
